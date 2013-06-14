@@ -1,6 +1,6 @@
 scalaVersion := "2.10.0"
 
-scalaHome := Some(file("/Users/JR/Projects/scala/build/pack/"))
+scalaHome := Some(file("/Users/JR/Projects/scala-latest/build/pack/"))
 
 libraryDependencies += "org.scala-lang" % "scala-compiler" % scalaVersion.value
 
