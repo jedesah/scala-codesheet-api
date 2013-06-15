@@ -42,25 +42,47 @@ class ScalaCodeSheetSpec extends Specification {
 				ScalaCodeSheet.computeResults(code) ==== List("hello => Hello!", "", "Hello!")
 			}
 			"with params" in {
-				"Int" in {
-					val code = "def foo(a: Int, b: Int, c: Int) = a + b - c"
-					ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 5, c = 7) => 1")
-				}
-				"String" in {
-					val code = """def addExclamation(a: String, b: String, c: String) = s"$a! $b! $c!" """
-					ScalaCodeSheet.computeResults(code) ==== List("""addExclamation(a = "foo", b = "bar", c = "biz") => foo! bar! biz!""")
-				}
-				"Float" in {
-					val code = "def foo(a: Float, b: Float, c: Float) = a + b - c"
-					ScalaCodeSheet.computeResults(code) ==== List("foo(a = 2.5, b = 4.5, c = 6.5) => 0.5")
-				}
-				"Boolean" in {
-					val code = "def foo(a: Boolean, b: Boolean, c: Boolean) = a && b || c"
-					ScalaCodeSheet.computeResults(code) ==== List("foo(a = true, b = false, c = true) => true")
-				}
-				"Long" in {
-					val code = "def foo(a: Long, b: Long, c: Long) = a + b - c"
-					ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 5, c = 7) => 1")
+				"basic types" in {
+					"Int" in {
+						val code = "def foo(a: Int, b: Int, c: Int) = a + b - c"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 5, c = 7) => 1")
+					}
+					"String" in {
+						val code = """def addExclamation(a: String, b: String, c: String) = s"$a! $b! $c!" """
+						ScalaCodeSheet.computeResults(code) ==== List("""addExclamation(a = "foo", b = "bar", c = "biz") => foo! bar! biz!""")
+					}
+					"Float" in {
+						val code = "def foo(a: Float, b: Float, c: Float) = a + b - c"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 2.5, b = 4.5, c = 6.5) => 0.5")
+					}
+					"Boolean" in {
+						val code = "def foo(a: Boolean, b: Boolean, c: Boolean) = a && b || c"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = true, b = false, c = true) => true")
+					}
+					"Long" in {
+						val code = "def foo(a: Long, b: Long, c: Long) = a + b - c"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 5, c = 7) => 1")
+					}
+					"Double" in {
+						val code = "def foo(a: Double, b: Double, c: Double) = a + b - c"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 2.5, b = 4.5, c = 6.5) => 0.5")
+					}
+					"Byte" in {
+						val code = "def foo(a: Byte, b: Byte, c: Byte) = a + b - c"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 5, c = 7) => 1")
+					}
+					"Short" in {
+						val code = "def foo(a: Short, b: Short, c: Short) = a + b - c"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 5, c = 7) => 1")
+					}
+					"Char" in {
+						val code = """def addExclamation(a: Char, b: Char, c: Char) = s"$a! $b! $c!" """
+						ScalaCodeSheet.computeResults(code) ==== List("addExclamation(a = 'a', b = 'b', c = 'c') => a! b! c!")
+					}
+					"AnyVal" in {
+						val code = """def foo(a: AnyVal, b: AnyVal, c: AnyVal) = s"$a! $b! $c!" """
+						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true)""")
+					}
 				}
 				"mixed" in {
 					(pending)

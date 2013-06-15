@@ -37,9 +37,9 @@ object ScalaCodeSheet {
         case expr: Block => expr.children.foldLeft((outputResult, symbols)) { (result, child) => evaluate(child, result._1, toolBox, result._2)}
         case _ : ClassDef => (outputResult, symbols + AST)
         case defdef : DefDef => {
-            val sampleValuesMap = iterableSampleValues
+            val sampleValuesPool = createSampleValuePool
             val sampleValues = defdef.vparamss.flatten.map {
-              case valDef => ValDef(Modifiers(), valDef.name, TypeTree(), Literal(Constant(sampleValuesMap(valDef.tpt.toString).next)))
+              case valDef => ValDef(Modifiers(), valDef.name, TypeTree(), Literal(Constant(sampleValuesPool(valDef.tpt.toString).next)))
             }
             val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues.toSet).toString
             val paramList = sampleValues.map( valDef => valDef.name + " = " + valDef.rhs).mkString(", ")
@@ -73,9 +73,22 @@ object ScalaCodeSheet {
     // I don't like the fact that 2 + 3 = 5 which is why I'd rather
     // start the sample Int values at 3 instead of at 2 in the primeNumbers list
     val sampleIntValues = Math.primeNumbers.drop(1)
-    val sampleStringValues = "foo" #:: "bar" #:: "biz" #:: "says" #:: "Hello" #:: "World" #:: Stream.continually("bazinga")
+    val sampleStringValues = "foo" #:: "bar" #:: "biz" #:: "says" #:: "Hello" #:: "World" #:: "bazinga" #:: Stream.empty repeat
+    val alphabet = "abcdefghijklmnopqrstuvwxyz"
+    val sampleCharValues = (0 until alphabet.length).map(alphabet.charAt(_)).toStream.repeat
     val sampleFloatValues = sampleIntValues.map(_ - 0.5)
-    val sampleValues = Map("Int" -> sampleIntValues, "String" -> sampleStringValues, "Float" -> sampleFloatValues)
+    val sampleBooleanValues = Stream.continually(true).zip(Stream.continually(false)).flatten(_.productIterator)
+    val sampleValues = Map(
+      "Int" -> sampleIntValues,
+      "String" -> sampleStringValues,
+      "Float" -> sampleFloatValues,
+      "Boolean" -> sampleBooleanValues,
+      "Long" -> sampleIntValues,
+      "Double" -> sampleFloatValues,
+      "Byte" -> sampleIntValues,
+      "Short" -> sampleIntValues,
+      "Char" -> sampleCharValues
+    )
     // Do not simply to use mapValues here because it fucks with how the iterator works here. This is probably a bug.
-    def iterableSampleValues = sampleValues.map{ case (key, value) => (key, value.toIterator)}
+    def createSampleValuePool = sampleValues.map{ case (key, value) => (key, value.toIterator)}
 }
