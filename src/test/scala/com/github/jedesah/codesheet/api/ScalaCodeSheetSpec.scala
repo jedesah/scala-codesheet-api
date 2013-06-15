@@ -81,7 +81,7 @@ class ScalaCodeSheetSpec extends Specification {
 					}
 					"AnyVal" in {
 						val code = """def foo(a: AnyVal, b: AnyVal, c: AnyVal) = s"$a! $b! $c!" """
-						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true)""")
+						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = 'f', c = true) => 3! f! true!""")
 					}
 				}
 				"mixed" in {
