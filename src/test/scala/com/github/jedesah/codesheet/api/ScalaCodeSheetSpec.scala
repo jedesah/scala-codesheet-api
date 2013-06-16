@@ -83,12 +83,38 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = """def foo(a: AnyVal, b: AnyVal, c: AnyVal) = s"$a! $b! $c!" """
 						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = 'f', c = true) => 3! f! true!""")
 					}
+					"Any" in {
+						val code = """def foo(a: Any, b: Any, c: Any) = s"$a! $b! $c!" """
+						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3! foo! true!""")
+					}
+					"AnyRef" in {
+						val code = """def bar(a: AnyRef, b: AnyRef, c: AnyRef) = s"a! $b! $c!" """
+						ScalaCodeSheet.computeResults(code) ==== List("""bar(a = "foo", b = List(3,5,7), c = Some(5)) => foo! List(3,5,7)! Some(5)!""")
+					}
+					"List" in {
+						val code = "def foo(a: List[Int], b: List[Int], c: List[Int]) = if (c.isEmpty) a.length else b.length"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = List(3,5,7), b = Nil, c = List(11)) => 0")
+					}
+					"Option" in {
+						val code = "def foo(a: Option[String], b: Option[String], c: Option[String]) = if(c.isEmpty) b else a"
+						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = Some("foo"), b = None, c = Some("bar")) => Some(foo)""")
+					}
+					"Seq" in {
+						val code = "def foo(a: Seq[Boolean], b: Seq[Boolean], c: Seq[Boolean]) = if (c.isEmpty) a.length else b.take(1)"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = List(true,false,true), b = Nil, c = List(true)) => Nil")
+					}
+					"wildCardGeneric" in {
+						val code = "def foo(a: List[_], b: List[_], c: List[_]) = if (c.nonEmpty) a else b"
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = List(3,5,7), b = Nil, c = List(true)) => List(3,4,7)")
+					}
 				}
 				"mixed" in {
-					(pending)
+					val code = """def foo(a: Int, b: String, c: Boolean) = if (c) a else b.length"""
+					ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""")
 				}
 				"with default Values" in {
-					(pending)
+					val code = "def foo(a: Int, b: Int = 10, c: Int = 1) = a + b - c"
+					ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 10, c = 1) => 12")
 				}
 			}	
 		}

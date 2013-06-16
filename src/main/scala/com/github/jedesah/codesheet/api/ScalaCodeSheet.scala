@@ -80,6 +80,7 @@ object ScalaCodeSheet {
     val sampleBooleanValues = true #:: false #:: Stream.empty repeat
     //val sampleAnyValValues = sampleIntValues.zip5(sampleStringValues, sampleFloatValues, sampleBooleanValues, sampleCharValues).flatten(_.productIterator)
     val sampleAnyValValues = 3 #:: 'f' #:: true #:: Stream.empty[AnyVal] repeat
+    val sampleAnyValues = 3 #:: "foo" #:: true #:: Stream.empty[Any] repeat
     val sampleValues = Map(
       "Int" -> sampleIntValues,
       "String" -> sampleStringValues,
@@ -90,7 +91,8 @@ object ScalaCodeSheet {
       "Byte" -> sampleIntValues,
       "Short" -> sampleIntValues,
       "Char" -> sampleCharValues,
-      "AnyVal" -> sampleAnyValValues
+      "AnyVal" -> sampleAnyValValues,
+      "Any" -> sampleAnyValues
     )
     // Do not simply to use mapValues here because it fucks with how the iterator works here. This is probably a bug.
     def createSampleValuePool = sampleValues.map{ case (key, value) => (key, value.toIterator)}
