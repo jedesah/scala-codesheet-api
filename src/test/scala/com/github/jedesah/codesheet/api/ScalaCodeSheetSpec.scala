@@ -88,8 +88,8 @@ class ScalaCodeSheetSpec extends Specification {
 						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3! foo! true!""")
 					}
 					"AnyRef" in {
-						val code = """def bar(a: AnyRef, b: AnyRef, c: AnyRef) = s"a! $b! $c!" """
-						ScalaCodeSheet.computeResults(code) ==== List("""bar(a = "foo", b = List(3,5,7), c = Some(5)) => foo! List(3,5,7)! Some(5)!""")
+						val code = """def bar(a: AnyRef, b: AnyRef, c: AnyRef) = s"$a! $b! $c!" """
+						ScalaCodeSheet.computeResults(code) ==== List("""bar(a = "foo", b = List(3, 5, 7), c = Some(5)) => foo! List(3, 5, 7)! Some(5)!""")
 					}
 					"List" in {
 						val code = "def foo(a: List[Int], b: List[Int], c: List[Int]) = if (c.isEmpty) a.length else b.length"

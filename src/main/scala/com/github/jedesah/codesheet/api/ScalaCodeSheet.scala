@@ -38,11 +38,11 @@ object ScalaCodeSheet {
         case _ : ClassDef => (outputResult, symbols + AST)
         case defdef : DefDef => {
             val sampleValuesPool = createSampleValuePool
-            val sampleValues = defdef.vparamss.flatten.map {
-              case valDef => ValDef(Modifiers(), valDef.name, TypeTree(), Literal(Constant(sampleValuesPool(valDef.tpt.toString).next)))
+            val sampleValues = defdef.vparamss.flatten.map { valDef =>
+              ValDef(Modifiers(), valDef.name, TypeTree(), sampleValuesPool(valDef.tpt.toString).next)
             }
             val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues.toSet).toString
-            val paramList = sampleValues.map( valDef => valDef.name + " = " + valDef.rhs).mkString(", ")
+            val paramList = sampleValues.map( valDef => valDef.name + " = " + prettyPrint(valDef.rhs)).mkString(", ")
             val lhs = defdef.name + (if (paramList.isEmpty) "" else s"($paramList)")
             val output = s"$lhs => $sampleResult"
             (updateOutput(output), symbols + AST)
@@ -56,6 +56,11 @@ object ScalaCodeSheet {
           (updateOutput(output), symbols)
         }
       }
+    }
+
+    def prettyPrint(tree: Tree): String = tree match {
+      case tree: Apply => tree.fun.asInstanceOf[Select].qualifier.toString + "(" + tree.args.mkString(", ") + ")"
+      case _ => tree.toString
     }
 
     def computeResults(code: String): List[String] = try {
@@ -73,26 +78,28 @@ object ScalaCodeSheet {
     // I don't like the fact that 2 + 3 = 5 which is why I'd rather
     // start the sample Int values at 3 instead of at 2 in the primeNumbers list
     val sampleIntValues = Math.primeNumbers.drop(1)
-    val sampleStringValues = "foo" #:: "bar" #:: "biz" #:: "says" #:: "Hello" #:: "World" #:: "bazinga" #:: Stream.empty repeat
+    val sampleStringValues = "foo" #:: "bar" #:: "biz" #:: "says" #:: "Hello" #:: "World" #:: "bazinga" #:: Stream.empty repeat 
     val alphabet = "abcdefghijklmnopqrstuvwxyz"
-    val sampleCharValues = (0 until alphabet.length).map(alphabet.charAt(_)).toStream.repeat
+    val sampleCharValues = (0 until alphabet.length).map(alphabet.charAt(_)).toStream.repeat 
     val sampleFloatValues = sampleIntValues.map(_ - 0.5)
     val sampleBooleanValues = true #:: false #:: Stream.empty repeat
     //val sampleAnyValValues = sampleIntValues.zip5(sampleStringValues, sampleFloatValues, sampleBooleanValues, sampleCharValues).flatten(_.productIterator)
     val sampleAnyValValues = 3 #:: 'f' #:: true #:: Stream.empty[AnyVal] repeat
     val sampleAnyValues = 3 #:: "foo" #:: true #:: Stream.empty[Any] repeat
+    val sampleAnyRefValues = (reify{"foo"} #:: reify{List(3,5,7)} #:: reify{Some(5)} #:: Stream.empty[Expr[AnyRef]]).repeat.map (_.tree)
     val sampleValues = Map(
-      "Int" -> sampleIntValues,
-      "String" -> sampleStringValues,
-      "Float" -> sampleFloatValues,
-      "Boolean" -> sampleBooleanValues,
-      "Long" -> sampleIntValues,
-      "Double" -> sampleFloatValues,
-      "Byte" -> sampleIntValues,
-      "Short" -> sampleIntValues,
-      "Char" -> sampleCharValues,
-      "AnyVal" -> sampleAnyValValues,
-      "Any" -> sampleAnyValues
+      "Int" -> (sampleIntValues map ( value => Literal(Constant(value)))),
+      "String" -> (sampleStringValues map (value => Literal(Constant(value)))),
+      "Float" -> (sampleFloatValues map ( value => Literal(Constant(value)))),
+      "Boolean" -> (sampleBooleanValues map ( value => Literal(Constant(value)))),
+      "Long" -> (sampleIntValues map ( value => Literal(Constant(value)))),
+      "Double" -> (sampleFloatValues map ( value => Literal(Constant(value)))),
+      "Byte" -> (sampleIntValues map ( value => Literal(Constant(value)))),
+      "Short" -> (sampleIntValues map ( value => Literal(Constant(value)))),
+      "Char" -> (sampleCharValues map ( value => Literal(Constant(value)))),
+      "AnyVal" -> (sampleAnyValValues map ( value => Literal(Constant(value)))),
+      "Any" -> (sampleAnyValues map ( value => Literal(Constant(value)))),
+      "AnyRef" -> sampleAnyRefValues
     )
     // Do not simply to use mapValues here because it fucks with how the iterator works here. This is probably a bug.
     def createSampleValuePool = sampleValues.map{ case (key, value) => (key, value.toIterator)}
