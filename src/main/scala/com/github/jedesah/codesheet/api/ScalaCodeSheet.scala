@@ -39,7 +39,17 @@ object ScalaCodeSheet {
         case defdef : DefDef => {
             val sampleValuesPool = createSampleValuePool
             val sampleValues = defdef.vparamss.flatten.map { valDef =>
-              ValDef(Modifiers(), valDef.name, TypeTree(), sampleValuesPool(valDef.tpt.toString).next)
+              // There is no default value so let's grab one from our samplePool
+              if (valDef.rhs.isEmpty) {
+                val sampleValueIt = sampleValuesPool.get(valDef.tpt.toString)
+                sampleValueIt match {
+                  case Some(sampleValueIt) => ValDef(Modifiers(), valDef.name, TypeTree(), sampleValueIt.next)
+                  case None => return (outputResult, symbols + AST)
+                }
+              }
+              // There is a default value so let's just use that one since we are pretty
+              // sure it's a typical value for this function
+              else valDef
             }
             val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues.toSet).toString
             val paramList = sampleValues.map( valDef => valDef.name + " = " + prettyPrint(valDef.rhs)).mkString(", ")
