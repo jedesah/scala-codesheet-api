@@ -9,7 +9,8 @@ import com.github.jedesah.Math
 
 object ScalaCodeSheet {
 
-    def evaluate(AST: Tree, outputResult: List[String], toolBox: ToolBox[reflect.runtime.universe.type], symbols: Set[Tree] = Set()): (List[String], Set[Tree]) = {
+    def evaluate(AST: Tree, outputResult: List[String], toolBox: ToolBox[reflect.runtime.universe.type], symbols: Set[Tree] = Set()): List[String] = {
+      lazy val classDefs = symbols.filter(_.isInstanceOf[ClassDef]).map(_.asInstanceOf[ClassDef])
       def updateOutput(newOutput: String) = {
           // -1 because the in memory compiler wraps the code in curly braces to form a block
           // -1 because we are dealing with a zero based collection but 1 based lines in the string
@@ -32,12 +33,12 @@ object ScalaCodeSheet {
         case ast @ ValDef(_, newTermName, _, assignee) => {
           val evaluatedAssignement = evaluateWithSymbols(assignee)
           val output = s"$newTermName = $evaluatedAssignement"
-          (updateOutput(output), symbols + AST)
+          updateOutput(output)
         }
-        case expr: Block => expr.children.foldLeft((outputResult, symbols)) { (result, child) => evaluate(child, result._1, toolBox, result._2)}
-        case _ : ClassDef => (outputResult, symbols + AST)
+        case expr: Block => expr.children.foldLeft(outputResult) { (result, child) => evaluate(child, result, toolBox, symbols ++ expr.children)}
+        case _ : ClassDef => outputResult
         case defdef : DefDef => {
-            val sampleValues = assignSampleValues(defdef.vparamss.flatten, defaultSamplePool, toolBox)
+            val sampleValues = assignSampleValues(defdef.vparamss.flatten, defaultSamplePool, classDefs, toolBox)
             val newOutputResult =
                 if (sampleValues.exists(_.rhs.isEmpty)) outputResult
                 else {
@@ -48,7 +49,7 @@ object ScalaCodeSheet {
                     updateOutput(output)
                 }
             
-            (newOutputResult, symbols + AST)
+            newOutputResult
         }
         case _ => {
           val result = evaluateWithSymbols(AST)
@@ -56,7 +57,7 @@ object ScalaCodeSheet {
             case _ : scala.runtime.BoxedUnit => ""
             case _ => result.toString
           }
-          (updateOutput(output), symbols)
+          updateOutput(output)
         }
       }
     }
@@ -74,7 +75,7 @@ object ScalaCodeSheet {
         val toolBox = cm.mkToolBox()
         val AST = toolBox.parse(code)
         val outputResult = (0 until code.lines.size).map( _ => "").toList
-        evaluate(AST, outputResult, toolBox)._1
+        evaluate(AST, outputResult, toolBox)
     } catch {
       case ToolBoxError(msg, cause) => {
         val userMessage = msg.dropWhile(_ != ':').drop(2).dropWhile(char => char == ' ' || char == '\n' || char == '\t')
@@ -88,6 +89,7 @@ object ScalaCodeSheet {
     */
     def assignSampleValues(original: List[ValDef],
                            samplePool: SamplePool,
+                           classDefs: Set[ClassDef],
                            toolBox: ToolBox[reflect.runtime.universe.type]): List[ValDef] =
         if (original.isEmpty) Nil
         else {
@@ -114,7 +116,7 @@ object ScalaCodeSheet {
             } getOrElse {
                 (valDef, samplePool)
             }
-            newValDef :: assignSampleValues(original.tail, newSamplePool, toolBox)
+            newValDef :: assignSampleValues(original.tail, newSamplePool, classDefs, toolBox)
         }
 
     // I don't like the fact that 2 + 3 = 5 which is why I'd rather
