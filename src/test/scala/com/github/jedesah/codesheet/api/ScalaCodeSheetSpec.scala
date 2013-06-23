@@ -53,7 +53,7 @@ class ScalaCodeSheetSpec extends Specification {
 					}
 					"Float" in {
 						val code = "def foo(a: Float, b: Float, c: Float) = a + b - c"
-						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 2.5, b = 4.5, c = 6.5) => 0.5")
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 1.5, b = 2.5, c = 4.5) => -0.5")
 					}
 					"Boolean" in {
 						val code = "def foo(a: Boolean, b: Boolean, c: Boolean) = a && b || c"
@@ -65,7 +65,7 @@ class ScalaCodeSheetSpec extends Specification {
 					}
 					"Double" in {
 						val code = "def foo(a: Double, b: Double, c: Double) = a + b - c"
-						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 2.5, b = 4.5, c = 6.5) => 0.5")
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = 1.5, b = 2.5, c = 4.5) => -0.5")
 					}
 					"Byte" in {
 						val code = "def foo(a: Byte, b: Byte, c: Byte) = a + b - c"
@@ -93,7 +93,7 @@ class ScalaCodeSheetSpec extends Specification {
 					}
 					"List" in {
 						val code = "def foo(a: List[Int], b: List[Int], c: List[Int]) = if (c.isEmpty) a.length else b.length"
-						ScalaCodeSheet.computeResults(code) ==== List("foo(a = List(3,5,7), b = Nil, c = List(11)) => 0")
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = List(3, 5, 7), b = Nil, c = List(11)) => 0")
 					}
 					"Option" in {
 						val code = "def foo(a: Option[String], b: Option[String], c: Option[String]) = if(c.isEmpty) b else a"
@@ -115,6 +115,36 @@ class ScalaCodeSheetSpec extends Specification {
 				"with default Values" in {
 					val code = "def foo(a: Int, b: Int = 10, c: Int = 1) = a + b - c"
 					ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 10, c = 1) => 12")
+				}
+				"multiline" in {
+					"1 line" in {
+						val code = """def foo(a: Int, b: String, c: Boolean) =
+									| 	if (c) a else b.length""".stripMargin
+						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""", "3")
+					}
+					"2 line" in {
+						val code = """def foo(a: Int, b: String, c: Boolean) =
+									| 	if (c)
+									|		a
+									|	else
+									|		b""".stripMargin
+						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""", "true", "3", "", "foo")
+					}
+					"more complex" in {
+						val code = """def foo(a: List[Int], b: String, c: String, d: Boolean, e: Boolean) =
+									| 	if (d && e || a.length == 2)
+									|		b.take(2) + c.drop(3)
+									|	else
+									|		b.take(3) + c.drop(1)""".stripMargin
+						val result = List(
+							"""foo(a = List(1,2,3), b = "foo", c = "bar", d = true, e = false) => foobar""",
+							"false",
+							"fba",
+							"",
+							"foobar"
+						)
+						ScalaCodeSheet.computeResults(code) ==== result
+					}
 				}
 			}	
 		}

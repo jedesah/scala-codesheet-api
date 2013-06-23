@@ -19,7 +19,7 @@ object ScalaCodeSheet {
           val updatedOutput = if (previousOutputOnLine == "") newOutput else previousOutputOnLine + " ; " + newOutput
           outputResult.updated(index, updatedOutput)
       }
-      def evaluateWithSymbols(expr: Tree, extraSymbols: Set[Tree] = Set()) = {
+      def evaluateWithSymbols(expr: Tree, extraSymbols: Traversable[Tree] = Set()) = {
           // In Scala 2.10.1, when you create a Block using the following deprecated method, if you pass in only one argument
           // it will be a block that adds a unit expressions at it's end and evaluates to unit. Useless behavior as far as we are concerned.
           // TODO: Remove use of deprecated Block constructor.
@@ -37,25 +37,18 @@ object ScalaCodeSheet {
         case expr: Block => expr.children.foldLeft((outputResult, symbols)) { (result, child) => evaluate(child, result._1, toolBox, result._2)}
         case _ : ClassDef => (outputResult, symbols + AST)
         case defdef : DefDef => {
-            val sampleValuesPool = createSampleValuePool
-            val sampleValues = defdef.vparamss.flatten.map { valDef =>
-              // There is no default value so let's grab one from our samplePool
-              if (valDef.rhs.isEmpty) {
-                val sampleValueIt = sampleValuesPool.get(valDef.tpt.toString)
-                sampleValueIt match {
-                  case Some(sampleValueIt) => ValDef(Modifiers(), valDef.name, TypeTree(), sampleValueIt.next)
-                  case None => return (outputResult, symbols + AST)
+            val sampleValues = assignSampleValues(defdef.vparamss.flatten, defaultSamplePool, toolBox)
+            val newOutputResult =
+                if (sampleValues.exists(_.rhs.isEmpty)) outputResult
+                else {
+                    val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues).toString
+                    val paramList:String = sampleValues.map( valDef => valDef.name + " = " + prettyPrint(valDef.rhs)).mkString(", ")
+                    val lhs:String = defdef.name + (if (paramList.isEmpty) "" else s"($paramList)")
+                    val output = s"$lhs => $sampleResult"
+                    updateOutput(output)
                 }
-              }
-              // There is a default value so let's just use that one since we are pretty
-              // sure it's a typical value for this function
-              else valDef
-            }
-            val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues.toSet).toString
-            val paramList = sampleValues.map( valDef => valDef.name + " = " + prettyPrint(valDef.rhs)).mkString(", ")
-            val lhs = defdef.name + (if (paramList.isEmpty) "" else s"($paramList)")
-            val output = s"$lhs => $sampleResult"
-            (updateOutput(output), symbols + AST)
+            
+            (newOutputResult, symbols + AST)
         }
         case _ => {
           val result = evaluateWithSymbols(AST)
@@ -68,8 +61,12 @@ object ScalaCodeSheet {
       }
     }
 
+    
     def prettyPrint(tree: Tree): String = tree match {
-      case tree: Apply => tree.fun.asInstanceOf[Select].qualifier.toString + "(" + tree.args.mkString(", ") + ")"
+      case tree: Apply => tree.fun match {
+          case fun: Select => fun.qualifier.toString + "(" + tree.args.mkString(", ") + ")"
+          case fun: Ident => fun.toString + "(" + tree.args.mkString(", ") + ")"
+      }
       case _ => tree.toString
     }
 
@@ -85,32 +82,92 @@ object ScalaCodeSheet {
       }
     }
 
+    /**
+      * Given a set of value definitions, will return new non-empty value definitions with sample values.
+      * If the a value definition is already non-empty or no sample value could be created, it will be returned unchanged
+    */
+    def assignSampleValues(original: List[ValDef],
+                           samplePool: SamplePool,
+                           toolBox: ToolBox[reflect.runtime.universe.type]): List[ValDef] =
+        if (original.isEmpty) Nil
+        else {
+            val valDef = original.head
+            val change: Option[(String, SamplePool)] =
+                if (!valDef.rhs.isEmpty) None
+                else {
+                    valDef.tpt match {
+                        case tpt: AppliedTypeTree => {
+                            val innerType = tpt.args(0).toString
+                            tpt.tpt.toString match {
+                                case "List" => samplePool.getList(innerType)
+                                case "Option" => samplePool.getOption(innerType)
+                                case _ => None
+                            } 
+                        }
+                        case tpt => samplePool.get(tpt.toString)
+                    }
+                }
+            val (newValDef, newSamplePool) = change.map {
+                case (sampleRHS, newSamplePool) =>
+                    val newValDef = ValDef(Modifiers(), valDef.name, TypeTree(), toolBox.parse(sampleRHS))
+                    (newValDef, newSamplePool)
+            } getOrElse {
+                (valDef, samplePool)
+            }
+            newValDef :: assignSampleValues(original.tail, newSamplePool, toolBox)
+        }
+
     // I don't like the fact that 2 + 3 = 5 which is why I'd rather
     // start the sample Int values at 3 instead of at 2 in the primeNumbers list
-    val sampleIntValues = Math.primeNumbers.drop(1)
-    val sampleStringValues = "foo" #:: "bar" #:: "biz" #:: "says" #:: "Hello" #:: "World" #:: "bazinga" #:: Stream.empty repeat 
+
+    val sampleIntValues = Math.primeNumbers.drop(1).map(_.toString)
+    val sampleStringValues = "\"foo\"" #:: "\"bar\"" #:: "\"biz\"" #:: "\"says\"" #:: "\"Hello\"" #:: "\"World\"" #:: "\"bazinga\"" #:: Stream.empty repeat 
     val alphabet = "abcdefghijklmnopqrstuvwxyz"
-    val sampleCharValues = (0 until alphabet.length).map(alphabet.charAt(_)).toStream.repeat 
-    val sampleFloatValues = sampleIntValues.map(_ - 0.5)
-    val sampleBooleanValues = true #:: false #:: Stream.empty repeat
+    val sampleCharValues = (0 until alphabet.length).map(alphabet.charAt(_)).toStream.repeat.map("\'" + _ + "\'")
+    val sampleFloatValues = Math.primeNumbers.map(_ - 0.5).map(_.toString)
+    val sampleBooleanValues = (true #:: false #:: Stream.empty).repeat.map(_.toString)
     //val sampleAnyValValues = sampleIntValues.zip5(sampleStringValues, sampleFloatValues, sampleBooleanValues, sampleCharValues).flatten(_.productIterator)
-    val sampleAnyValValues = 3 #:: 'f' #:: true #:: Stream.empty[AnyVal] repeat
-    val sampleAnyValues = 3 #:: "foo" #:: true #:: Stream.empty[Any] repeat
-    val sampleAnyRefValues = (reify{"foo"} #:: reify{List(3,5,7)} #:: reify{Some(5)} #:: Stream.empty[Expr[AnyRef]]).repeat.map (_.tree)
-    val sampleValues = Map(
-      "Int" -> (sampleIntValues map ( value => Literal(Constant(value)))),
-      "String" -> (sampleStringValues map (value => Literal(Constant(value)))),
-      "Float" -> (sampleFloatValues map ( value => Literal(Constant(value)))),
-      "Boolean" -> (sampleBooleanValues map ( value => Literal(Constant(value)))),
-      "Long" -> (sampleIntValues map ( value => Literal(Constant(value)))),
-      "Double" -> (sampleFloatValues map ( value => Literal(Constant(value)))),
-      "Byte" -> (sampleIntValues map ( value => Literal(Constant(value)))),
-      "Short" -> (sampleIntValues map ( value => Literal(Constant(value)))),
-      "Char" -> (sampleCharValues map ( value => Literal(Constant(value)))),
-      "AnyVal" -> (sampleAnyValValues map ( value => Literal(Constant(value)))),
-      "Any" -> (sampleAnyValues map ( value => Literal(Constant(value)))),
+    val sampleAnyValValues = "3" #:: "\'f\'" #:: "true" #:: Stream.empty repeat
+    val sampleAnyValues = "3" #:: "\"foo\"" #:: "true" #:: Stream.empty repeat
+    val sampleAnyRefValues = "\"foo\"" #:: "List(3,5,7)" #:: "Some(5)" #:: Stream.empty repeat
+
+    val sampleSeqLengths = 3 #:: 0 #:: 1 #:: 2 #:: Stream.empty repeat
+    val sampleSomeOrNone = true #:: false #:: Stream.empty repeat
+    
+    val simpleValues = Map(
+      "Int" -> sampleIntValues,
+      "String" -> sampleStringValues,
+      "Float" -> sampleFloatValues,
+      "Boolean" -> sampleBooleanValues,
+      "Long" -> sampleIntValues,
+      "Double" -> sampleFloatValues,
+      "Byte" -> sampleIntValues,
+      "Short" -> sampleIntValues,
+      "Char" -> sampleCharValues,
+      "AnyVal" -> sampleAnyValValues,
+      "Any" -> sampleAnyValues,
       "AnyRef" -> sampleAnyRefValues
     )
-    // Do not simply to use mapValues here because it fucks with how the iterator works here. This is probably a bug.
-    def createSampleValuePool = sampleValues.map{ case (key, value) => (key, value.toIterator)}
+
+    val defaultSamplePool = SamplePool(simpleValues, sampleSeqLengths, sampleSomeOrNone)
+}
+
+case class SamplePool(values: Map[String, Stream[String]], seqLengths: Stream[Int], someOrNone: Stream[Boolean]) {
+    def get(type_ : String): Option[(String, SamplePool)] =
+        values.get(type_).map { stream => 
+            (stream.head, this.copy(values = values.updated(type_, stream.tail)))
+        }
+    def getList(type_ : String): Option[(String, SamplePool)] =
+        values.get(type_).map { valuesForType =>
+            val (innerSamples, rest) = valuesForType.splitAt(seqLengths.head)
+            val sample:String = if (seqLengths.head == 0) "Nil" else "List(" + innerSamples.mkString(",") + ")"
+            (sample, this.copy( values = values.updated(type_, rest), seqLengths = seqLengths.tail))
+        }
+    def getOption(type_ : String): Option[(String, SamplePool)] =
+        values.get(type_).map { valuesForType =>
+            val (sample, newValues) =
+              if (someOrNone.head) ("Some(" + valuesForType.head + ")", values.updated(type_, valuesForType.tail))
+              else ("None", values)
+            (sample, this.copy(values = newValues, someOrNone = someOrNone.tail))
+        }
 }
