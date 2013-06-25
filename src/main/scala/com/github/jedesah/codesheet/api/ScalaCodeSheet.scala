@@ -90,7 +90,25 @@ object ScalaCodeSheet {
     def assignSampleValues(original: List[ValDef],
                            samplePool: SamplePool,
                            classDefs: Set[ClassDef],
-                           toolBox: ToolBox[reflect.runtime.universe.type]): List[ValDef] =
+                           toolBox: ToolBox[reflect.runtime.universe.type]): List[ValDef] = {
+        def assignCaseClassSampleValue(type_ : Tree): Option[(String, SamplePool)] =
+            classDefs.find(_.name.toString == type_.toString).map { classDef =>
+                val isConstructor = (member: Tree) => {
+                    member match {
+                        case defdef: DefDef => defdef.name.toString == "<init>"
+                        case _ => false
+                    }
+                } 
+                val constructor:Option[DefDef] = classDef.impl.body.find(isConstructor).asInstanceOf[Option[DefDef]]
+                constructor.map { constructorDef =>
+                    val innerSamples = assignSampleValues(constructorDef.vparamss.flatten, samplePool, classDefs, toolBox)
+                    // TODO: Actually remove sample values from the samplePool instead of just returning it unchanged
+                    // TODO: Don't assume it's a case class
+                    val sample:String = classDef.name + "(" + innerSamples.map(_.rhs).mkString(",") + ")"
+                    (sample, samplePool)
+                }
+                
+            }.flatten
         if (original.isEmpty) Nil
         else {
             val valDef = original.head
@@ -106,7 +124,7 @@ object ScalaCodeSheet {
                                 case _ => None
                             } 
                         }
-                        case tpt => samplePool.get(tpt.toString)
+                        case tpt => samplePool.get(tpt.toString).orElse(assignCaseClassSampleValue(tpt))
                     }
                 }
             val (newValDef, newSamplePool) = change.map {
@@ -118,6 +136,7 @@ object ScalaCodeSheet {
             }
             newValDef :: assignSampleValues(original.tail, newSamplePool, classDefs, toolBox)
         }
+    }
 
     // I don't like the fact that 2 + 3 = 5 which is why I'd rather
     // start the sample Int values at 3 instead of at 2 in the primeNumbers list

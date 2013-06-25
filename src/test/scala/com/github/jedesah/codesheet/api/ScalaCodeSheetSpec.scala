@@ -108,6 +108,11 @@ class ScalaCodeSheetSpec extends Specification {
 						ScalaCodeSheet.computeResults(code) ==== List("foo(a = List(3,5,7), b = Nil, c = List(true)) => List(3,4,7)")
 					}
 				}
+				"case class" in {
+					val code = """case class Car(year: Int, model: String)
+								| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo")) => foo-3""")
+				}
 				"mixed" in {
 					val code = """def foo(a: Int, b: String, c: Boolean) = if (c) a else b.length"""
 					ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""")
