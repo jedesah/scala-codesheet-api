@@ -26,7 +26,7 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 		}
 
-		"funtion" in {
+		"function" in {
 			"simple definition" in {
 				val code = """def hello = "Hello!" """
 				ScalaCodeSheet.computeResults(code) ==== List("hello => Hello!")
