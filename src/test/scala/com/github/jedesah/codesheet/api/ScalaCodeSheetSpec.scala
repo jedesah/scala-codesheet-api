@@ -304,12 +304,26 @@ class ScalaCodeSheetSpec extends Specification {
 				ScalaCodeSheet.computeResults(code) ==== List("", "", "Fiat", "1999")
 			}
 			"complex" in {
-				val code = """case class Car(model: String, year: Int) {
-							| 	def drive { println("vroum vroum")}
-							| }
-							| val a = new Car("BMW", 2013)
-							| a.drive""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("", "", "", "a = Car(BMW,2013)", "")
+				"1" in {
+					val code = """case class Car(model: String, year: Int) {
+								| 	def drive { println("vroum vroum")}
+								| }
+								| val a = new Car("BMW", 2013)
+								| a.drive""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "", "")
+				}
+				"2" in {
+					val code = """case class Car(model: String, year: Int) {
+								|	def license(seed: Int) = model.take(seed) + year + seed
+								| }""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("""Car(model = "foo", year = 3) {""", "license(seed = 3) => foo33", "}")
+				}
+				"3" in {
+					val code = """case class Car(model: String, year: Int) {
+								|	def license = 5
+								| }""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", "", "")
+				}
 			}
 		}
 	}
