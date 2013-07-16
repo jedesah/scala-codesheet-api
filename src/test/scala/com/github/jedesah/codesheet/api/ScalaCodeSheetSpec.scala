@@ -29,7 +29,7 @@ class ScalaCodeSheetSpec extends Specification {
 		"function" in {
 			"simple definition" in {
 				val code = """def hello = "Hello!" """
-				ScalaCodeSheet.computeResults(code) ==== List("hello => Hello!")
+				ScalaCodeSheet.computeResults(code) ==== List("")
 			}
 			"complex definition" in {
 				val code = "def foo = 10 * 4 - 2"
@@ -39,7 +39,7 @@ class ScalaCodeSheetSpec extends Specification {
 				val code = """def hello = "Hello!"
 							|
 							| hello""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("hello => Hello!", "", "Hello!")
+				ScalaCodeSheet.computeResults(code) ==== List("", "", "Hello!")
 			}
 			"with params" in {
 				"basic types" in {
@@ -157,7 +157,7 @@ class ScalaCodeSheetSpec extends Specification {
 		"value definition" in {
 			"simple" in {
 				val code = "val a = 34"
-				ScalaCodeSheet.computeResults(code) ==== List("a = 34")
+				ScalaCodeSheet.computeResults(code) ==== List("")
 			}
 			"complex" in {
 				val code = "val a = 2 * 3 - 2"
@@ -166,7 +166,7 @@ class ScalaCodeSheetSpec extends Specification {
 			"with use" in {
 				val code = """val a = 34
 							| a + 10""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("a = 34", "44")
+				ScalaCodeSheet.computeResults(code) ==== List("", "44")
 			}
 		}
 
@@ -178,14 +178,14 @@ class ScalaCodeSheetSpec extends Specification {
 			"with instantiation" in {
 				val code = """case class Car(model: String, year: Int)
 							| val test = Car("Fiat", 1999)""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("", "test = Car(Fiat,1999)")
+				ScalaCodeSheet.computeResults(code) ==== List("", "")
 			}
 			"with use" in {
 				val code = """case class Car(model: String, year: Int)
 							| val test = Car("Fiat", 1999)
 							| test.model
 							| test.year""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("", "test = Car(Fiat,1999)", "Fiat", "1999")
+				ScalaCodeSheet.computeResults(code) ==== List("", "", "Fiat", "1999")
 			}
 			"complex" in {
 				val code = """case class Car(model: String, year: Int) {
