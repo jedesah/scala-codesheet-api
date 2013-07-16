@@ -108,10 +108,126 @@ class ScalaCodeSheetSpec extends Specification {
 						ScalaCodeSheet.computeResults(code) ==== List("foo(a = List(3,5,7), b = Nil, c = List(true)) => List(3,4,7)")
 					}
 				}
-				"case class" in {
-					val code = """case class Car(year: Int, model: String)
-								| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo")) => foo-3""")
+				"custom class" in {
+					"case" in {
+						"one case class definition" in {
+							"one param occurence" in {
+								val code = """case class Car(year: Int, model: String)
+										| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
+								ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo")) => foo-3""")
+							}
+							"two param occurence" in {
+								val code = """case class Car(year: Int, model: String)
+										| def foo(a: Car, b: Car) = a.year - b.year""".stripMargin
+								ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo"), b = Car(3, "foo")) => 0""")
+							}
+						}
+						"two case class definitions" in {
+							"use of first one" in {
+								val code = """case class Car(year: Int, model: String)
+									  | case class Person(name: String, age: Int)
+									  | def isMatch(car: Car) = car.year""".stripMargin
+								val result = List(
+									"",
+									"",
+									"""isMatch(car = Car(3, "foo")) => 3"""
+								)
+								ScalaCodeSheet.computeResults(code) ==== result
+							}
+							"use of second one" in {
+								val code = """case class Car(year: Int, model: String)
+									  | case class Person(name: String, age: Int)
+									  | def isMatch(person: Person) = person.name""".stripMargin
+								val result = List(
+									"",
+									"",
+									"""isMatch(person = Person("foo", 3)) => foo"""
+								)
+								ScalaCodeSheet.computeResults(code) ==== result
+							}
+						}
+						"multiple case class definitions" in {
+							"one param occurence" in {
+								"case 1" in {
+									val code = """case class Car(year: Int, model: String)
+										  | case class Person(name: String, age: Int)
+										  | case class Document(text: String, author: String)
+										  | def isMatch(doc: Document) = doc.author""".stripMargin
+									val result = List(
+										"",
+										"",
+										"",
+										"""isMatch(doc = Document("foo", "bar")) => bar"""
+									)
+									ScalaCodeSheet.computeResults(code) ==== result
+								}
+								"case 2" in {
+									val code = """case class Car(year: Int, model: String)
+										  | case class Person(name: String, age: Int)
+										  | case class Document(text: String, author: String)
+										  | def isMatch(person: Person) = person.name""".stripMargin
+									val result = List(
+										"",
+										"",
+										"",
+										"""isMatch(person = Person("foo", 3)) => foo"""
+									)
+									ScalaCodeSheet.computeResults(code) ==== result
+								}
+								"case 3" in {
+									val code = """case class Car(year: Int, model: String)
+										  | case class Person(name: String, age: Int)
+										  | case class Document(text: String, author: String)
+										  | def isMatch(car: Car) = car.year""".stripMargin
+									val result = List(
+										"",
+										"",
+										"",
+										"""isMatch(car = Car(3, "foo")) => 3"""
+									)
+									ScalaCodeSheet.computeResults(code) ==== result
+								}
+							}
+							"multiple occurences" in {
+								val code = """case class Car(year: Int, model: String)
+									  | case class Person(name: String, age: Int)
+									  | case class Document(text: String, author: String)
+									  | def isMatch(doc: Document, peps: Person) = doc.author == peps.name""".stripMargin
+								val result = List(
+									"",
+									"",
+									"",
+									"""isMatch(doc = Document("foo", "bar"), peps = Person("foo", 3)) => false"""
+								)
+								ScalaCodeSheet.computeResults(code) ==== result
+							}
+						}
+						"multiple function definitions" in {
+							val code = """case class Car(year: Int, model: String)
+									  | case class Person(name: String, age: Int)
+									  | case class Document(text: String, author: String)
+									  | def isMatch(doc: Document, peps: Person) = doc.author == peps.name
+									  | def barCode(car: Car) = car.model + "-" + car.year""".stripMargin
+							val result = List(
+								"",
+								"",
+								"",
+								"""isMatch(doc = Document("foo", "bar"), peps = Person("foo", 3)) => false""",
+								"""barCode(car = Car(3, "foo")) => foo-3"""
+							)
+							ScalaCodeSheet.computeResults(code) ==== result
+						}
+					}
+					"normal" in {
+						"one" in {
+							val code = """class Car(year: Int, model: String)
+										| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
+							ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = new Car(3, "foo")) => foo-3""")
+						}
+						"three" in {
+							pending
+						}
+					}
 				}
 				"mixed" in {
 					val code = """def foo(a: Int, b: String, c: Boolean) = if (c) a else b.length"""
