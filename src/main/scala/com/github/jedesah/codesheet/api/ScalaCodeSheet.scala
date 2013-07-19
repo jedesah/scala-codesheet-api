@@ -48,8 +48,8 @@ object ScalaCodeSheet {
         case expr: Block => expr.children.inits.toList.reverse.drop(1).foldLeft(outputResult) { (result, childs) =>
             evaluate(childs.last, result, toolBox, symbols ++ childs.init)
         }
-        case classDef : ClassDef => getConstructor(classDef).flatMap { constructor =>
-            getSampleValuesIfPossible(constructor, defaultSamplePool, classDefs, toolBox).map { sampleValues =>
+        case classDef : ClassDef => classDef.constructorOption.flatMap { constructor =>
+            constructor.sampleParamsOption(classDefs).map { case (sampleValues, _) =>
                 // We remove the value defintions resulting from the class parameters and the primary constructor
                 val body = classDef.impl.body.filter {
                     case valDef: ValDef => !sampleValues.exists( sampleValDef => sampleValDef.name == valDef.name)
@@ -77,7 +77,7 @@ object ScalaCodeSheet {
         case defdef : DefDef => {
             if (isSimpleExpression(defdef.rhs)) outputResult
             else {
-                getSampleValuesIfPossible(defdef, defaultSamplePool, classDefs, toolBox) map { sampleValues =>
+                defdef.sampleParamsOption(classDefs) map { case (sampleValues, _) =>
                     val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues :+ defdef).toString
                     val signature:String = defdef.name + paramList(sampleValues):String
                     val output = s"$signature => $sampleResult"
@@ -131,69 +131,79 @@ object ScalaCodeSheet {
       }
     }
 
-    /**
-      * Given a set of value definitions, will return new non-empty value definitions with sample values.
-      * If the a value definition is already non-empty or no sample value could be created, it will be returned unchanged
-    */
-    def assignSampleValues(original: List[ValDef],
-                           samplePool: SamplePool,
-                           classDefs: Traversable[ClassDef],
-                           toolBox: ToolBox[reflect.runtime.universe.type]): List[ValDef] = {
-        def assignCaseClassSampleValue(type_ : Tree): Option[(String, SamplePool)] =
-            classDefs.find(_.name.toString == type_.toString).map { classDef =>
-                getConstructor(classDef).map { constructorDef =>
-                    val innerSamples = assignSampleValues(constructorDef.vparamss.flatten, samplePool, classDefs, toolBox)
-                    // TODO: Actually remove sample values from the samplePool instead of just returning it unchanged
-                    // TODO: Don't assume it's a case class
-                    val sample:String = classDef.name + "(" + innerSamples.map(_.rhs).mkString(",") + ")"
-                    println(sample)
-                    (sample, samplePool)
-                }
-                
-            }.flatten
-        if (original.isEmpty) Nil
-        else {
-            val valDef = original.head
-            val change: Option[(String, SamplePool)] =
-                if (!valDef.rhs.isEmpty) None
+    implicit class AugmentedClassDef(classDef: ClassDef) {
+        val constructorOption = classDef.impl.body.collectFirst{ case defdef: DefDef if defdef.name == nme.CONSTRUCTOR => defdef}
+    }
+
+    implicit class DefDefWithSamples(defdef: DefDef) {
+        def sampleParamsOption(classDefs: Traversable[ClassDef] = Nil,
+                               samplePool: SamplePool = defaultSamplePool): Option[(List[ValDef], SamplePool)] = {
+            def sequentialEagerTerminationImpl(valDefs: List[ValDef], samplePool: SamplePool): Option[(List[ValDef], SamplePool)] = {
+                if (valDefs.isEmpty) Some(Nil, samplePool)
                 else {
-                    valDef.tpt match {
-                        case tpt: AppliedTypeTree => {
-                            val innerType = tpt.args(0).toString
-                            tpt.tpt.toString match {
-                                case "List" => samplePool.getList(innerType)
-                                case "Option" => samplePool.getOption(innerType)
-                                case "Seq" => samplePool.getList(innerType)
-                                case _ => None
-                            } 
+                    valDefs.head.withSampleValue(classDefs, samplePool).map { case (newValDef, delveDownPool) =>
+                        sequentialEagerTerminationImpl(valDefs.tail, delveDownPool).map { case (rest, bubbleUpPool) =>
+                            (newValDef :: rest, bubbleUpPool)
                         }
-                        case tpt => samplePool.get(tpt.toString).orElse(assignCaseClassSampleValue(tpt))
-                    }
+                    }.flatten
                 }
-            val (newValDef, newSamplePool) = change.map {
-                case (sampleRHS, newSamplePool) =>
-                    val newValDef = ValDef(Modifiers(), valDef.name, TypeTree(), toolBox.parse(sampleRHS))
-                    (newValDef, newSamplePool)
-            } getOrElse {
-                (valDef, samplePool)
             }
-            newValDef :: assignSampleValues(original.tail, newSamplePool, classDefs, toolBox)
+            // TODO: Handle currying better
+            val allParams = defdef.vparamss.flatten
+            sequentialEagerTerminationImpl(allParams, samplePool)
         }
     }
 
-    def getConstructor(classDef: ClassDef): Option[DefDef] =
-      classDef.impl.body.collectFirst{ case defdef: DefDef if defdef.name.toString == "<init>" => defdef }
-    /**
-    * Returns both the value definitions containing the sample values and the string representation of the function signature
-    * if all sample values were correctly generated.
-    */
-    def getSampleValuesIfPossible(defdef: DefDef,
-                                          samplePool: SamplePool,
-                                          classDefs: Traversable[ClassDef],
-                                          toolBox: ToolBox[reflect.runtime.universe.type]): Option[List[ValDef]] = {
-        val sampleValues = assignSampleValues(defdef.vparamss.flatten, samplePool, classDefs, toolBox)
-        if (sampleValues.exists(_.rhs.isEmpty)) None
-        else Some(sampleValues)
+    implicit class ValDefWithSample(valDef: ValDef) {
+
+        def withSampleValue(classDefs: Traversable[ClassDef] = Nil,
+                            samplePool: SamplePool = defaultSamplePool): Option[(ValDef, SamplePool)] =
+            if (valDef.rhs.isEmpty)
+                valDef.sampleValue(classDefs, samplePool).map{ case (rhs, newSamplePool) =>
+                  (ValDef(Modifiers(), valDef.name, TypeTree(), rhs), newSamplePool)
+                }
+            else
+                Some(valDef, samplePool)
+
+        def sampleValue(classDefs: Traversable[ClassDef] = Nil,
+                        samplePool: SamplePool = defaultSamplePool): Option[(Tree, SamplePool)] = {
+            valDef.tpt.sampleValue(classDefs, samplePool)
+        }
+    }
+
+    implicit class TreeWithSample(tree: Tree) {
+
+        def sampleValue(classDefs: Traversable[ClassDef] = Nil,
+                        samplePool: SamplePool = defaultSamplePool): Option[(Tree, SamplePool)] = {
+            def assignCaseClassSampleValue: Option[(Tree, SamplePool)] =
+                classDefs.find(_.name.toString == tree.toString).map { classDef =>
+                    classDef.constructorOption.map { constructorDef =>
+                        constructorDef.sampleParamsOption(classDefs, samplePool).map { case (innerValues, newSamplePool) =>
+                            val caseClassConstructionExpression = (Apply(Ident(newTermName(tree.toString)), innerValues.map(_.rhs)))
+                            (caseClassConstructionExpression, newSamplePool)
+                        }
+                    }
+                }.flatten.flatten
+            tree match {
+                case tpt: AppliedTypeTree => {
+                    val innerType = tpt.args(0).toString
+                    tpt.tpt.toString match {
+                        case "List" => samplePool.getList(innerType)
+                        case "Option" => samplePool.getOption(innerType)
+                        case "Seq" => samplePool.getList(innerType)
+                        case _ => None
+                    }
+                }
+                // wildCardGeneric is not working because Any from existential type is represented as scala.Any instead
+                // of just Any
+                case tpt: ExistentialTypeTree => {
+                    val upperBound = tpt.whereClauses(0).asInstanceOf[TypeDef].rhs.asInstanceOf[TypeBoundsTree].hi
+                    upperBound.sampleValue(classDefs, samplePool)
+                }
+
+                case tpt => samplePool.get(tpt.toString).orElse(assignCaseClassSampleValue)
+            }
+        }
     }
 
     def paramList(valDefs: List[ValDef]):String = {
@@ -235,25 +245,30 @@ object ScalaCodeSheet {
       "AnyRef" -> sampleAnyRefValues
     )
 
-    val defaultSamplePool = SamplePool(simpleValues, sampleSeqLengths, sampleSomeOrNone)
+    val parsedSimpleValues = simpleValues.mapValues(stream => stream.map(cm.mkToolBox().parse(_)))
+    val defaultSamplePool = SamplePool(parsedSimpleValues, sampleSeqLengths, sampleSomeOrNone)
 }
 
-case class SamplePool(values: Map[String, Stream[String]], seqLengths: Stream[Int], someOrNone: Stream[Boolean]) {
-    def get(type_ : String): Option[(String, SamplePool)] =
+case class SamplePool(values: Map[String, Stream[Tree]], seqLengths: Stream[Int], someOrNone: Stream[Boolean]) {
+    def get(type_ : String): Option[(Tree, SamplePool)] =
         values.get(type_).map { stream => 
             (stream.head, this.copy(values = values.updated(type_, stream.tail)))
         }
-    def getList(type_ : String): Option[(String, SamplePool)] =
+    def getList(type_ : String): Option[(Tree, SamplePool)] =
         values.get(type_).map { valuesForType =>
             val (innerSamples, rest) = valuesForType.splitAt(seqLengths.head)
-            val sample:String = if (seqLengths.head == 0) "Nil" else "List(" + innerSamples.mkString(",") + ")"
+            val sample =
+                if (seqLengths.head == 0)
+                    Ident(newTermName("Nil"))
+                else
+                    Apply(Ident(newTermName("List")), innerSamples.toList)
             (sample, this.copy( values = values.updated(type_, rest), seqLengths = seqLengths.tail))
         }
-    def getOption(type_ : String): Option[(String, SamplePool)] =
+    def getOption(type_ : String): Option[(Tree, SamplePool)] =
         values.get(type_).map { valuesForType =>
             val (sample, newValues) =
-              if (someOrNone.head) ("Some(" + valuesForType.head + ")", values.updated(type_, valuesForType.tail))
-              else ("None", values)
+              if (someOrNone.head) (Apply(Ident(newTermName("Some")), List(valuesForType.head)), values.updated(type_, valuesForType.tail))
+              else (Ident(newTermName("None")), values)
             (sample, this.copy(values = newValues, someOrNone = someOrNone.tail))
         }
 }
