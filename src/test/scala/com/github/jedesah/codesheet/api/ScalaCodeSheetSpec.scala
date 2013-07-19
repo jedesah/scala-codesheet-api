@@ -220,7 +220,7 @@ class ScalaCodeSheetSpec extends Specification {
 					}
 					"normal" in {
 						"one" in {
-							val code = """class Car(year: Int, model: String)
+							val code = """class Car(val year: Int, val model: String)
 										| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
 							ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = new Car(3, "foo")) => foo-3""")
 						}
