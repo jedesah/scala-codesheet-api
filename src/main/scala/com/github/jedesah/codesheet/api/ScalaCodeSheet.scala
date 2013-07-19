@@ -179,8 +179,14 @@ object ScalaCodeSheet {
                 classDefs.find(_.name.toString == tree.toString).map { classDef =>
                     classDef.constructorOption.map { constructorDef =>
                         constructorDef.sampleParamsOption(classDefs, samplePool).map { case (innerValues, newSamplePool) =>
-                            val caseClassConstructionExpression = (Apply(Ident(newTermName(tree.toString)), innerValues.map(_.rhs)))
-                            (caseClassConstructionExpression, newSamplePool)
+                            import scala.reflect.runtime.universe.Flag._
+                            val isCaseClass = classDef.mods.hasFlag(CASE)
+                            val objectConstructionExpression =
+                                if (isCaseClass)
+                                    Apply(Ident(newTermName(tree.toString)), innerValues.map(_.rhs))
+                                else
+                                    Apply(Select(New(Ident(newTypeName(tree.toString))), nme.CONSTRUCTOR), innerValues.map(_.rhs))
+                            (objectConstructionExpression, newSamplePool)
                         }
                     }
                 }.flatten.flatten
