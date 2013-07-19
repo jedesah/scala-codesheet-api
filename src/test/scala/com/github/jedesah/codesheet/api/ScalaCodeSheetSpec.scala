@@ -119,7 +119,7 @@ class ScalaCodeSheetSpec extends Specification {
 							"two param occurence" in {
 								val code = """case class Car(year: Int, model: String)
 										| def foo(a: Car, b: Car) = a.year - b.year""".stripMargin
-								ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo"), b = Car(3, "foo")) => 0""")
+								ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo"), b = Car(5, "bar")) => -2""")
 							}
 						}
 						"two case class definitions" in {
@@ -197,7 +197,7 @@ class ScalaCodeSheetSpec extends Specification {
 									"",
 									"",
 									"",
-									"""isMatch(doc = Document("foo", "bar"), peps = Person("foo", 3)) => false"""
+									"""isMatch(doc = Document("foo", "bar"), peps = Person("biz", 3)) => false"""
 								)
 								ScalaCodeSheet.computeResults(code) ==== result
 							}
@@ -212,7 +212,7 @@ class ScalaCodeSheetSpec extends Specification {
 								"",
 								"",
 								"",
-								"""isMatch(doc = Document("foo", "bar"), peps = Person("foo", 3)) => false""",
+								"""isMatch(doc = Document("foo", "bar"), peps = Person("biz", 3)) => false""",
 								"""barCode(car = Car(3, "foo")) => foo-3"""
 							)
 							ScalaCodeSheet.computeResults(code) ==== result
