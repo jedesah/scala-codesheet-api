@@ -11,19 +11,17 @@ object ScalaCodeSheet {
 
     def evaluate(AST: Tree, outputResult: List[String], toolBox: ToolBox[reflect.runtime.universe.type], symbols: List[Tree] = Nil): List[String] = {
       lazy val classDefs: Traversable[ClassDef] = symbols.collect{ case elem: ClassDef => elem}
-      // It's too bad Scala does not support method overriding of definitions
-      // contained within another definition
-      def updateThisOutput(newOutput: String) =
-          updateOutput(outputResult, newOutput)
-      def updateOutput(oldOutput: List[String], newOutput: String) = {
+
+      def updateOutput(oldOutput: List[String] = outputResult, newOutput: String, line: Int = AST.pos.line) = {
           // -1 because the in memory compiler wraps the code in curly braces to form a block
           // -1 because we are dealing with a zero based collection but 1 based lines in the string
-          val index = AST.pos.line - 2
+          val index = line - 2
           val previousOutputOnLine = oldOutput(index)
           // We could conceivably have more than one result on a single line
           val updatedOutput = if (previousOutputOnLine == "") newOutput else previousOutputOnLine + " ; " + newOutput
           oldOutput.updated(index, updatedOutput)
       }
+
       def evaluateWithSymbols(expr: Tree, extraSymbols: Traversable[Tree] = Set()) = {
           // In Scala 2.10.1, when you create a Block using the following deprecated method, if you pass in only one argument
           // it will be a block that adds a unit expressions at it's end and evaluates to unit. Useless behavior as far as we are concerned.
@@ -40,7 +38,7 @@ object ScalaCodeSheet {
           else {
               val evaluatedAssignement = evaluateWithSymbols(assignee)
               val output = s"$newTermName = $evaluatedAssignement"
-              updateThisOutput(output)
+              updateOutput(newOutput = output)
           }
         }
         // We fold over each child and all of it's preceding childs (inits) and evaluate
@@ -67,7 +65,9 @@ object ScalaCodeSheet {
                     else {
                         val signature:String = classDef.name + paramList(sampleValues):String
                         val output = s"$signature {"
-                        updateOutput(newOutput, output)
+                        val withBefore = updateOutput(newOutput, output)
+                        val lastLine = body.map(_.pos.line).max + 1
+                        updateOutput(withBefore, "}", lastLine)
                     }
                 }
             }
@@ -81,7 +81,7 @@ object ScalaCodeSheet {
                     val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues :+ defdef).toString
                     val signature:String = defdef.name + paramList(sampleValues):String
                     val output = s"$signature => $sampleResult"
-                    updateThisOutput(output)
+                    updateOutput(newOutput = output)
                 } getOrElse {
                     outputResult
                 }
@@ -93,7 +93,7 @@ object ScalaCodeSheet {
             case _ : scala.runtime.BoxedUnit => ""
             case _ => result.toString
           }
-          updateThisOutput(output)
+          updateOutput(newOutput = output)
         }
       }
     }
