@@ -186,21 +186,62 @@ object ScalaCodeSheet {
                 }.flatten.flatten
             tree match {
                 case tpt: AppliedTypeTree => {
-                    val innerType = tpt.args(0).toString
+                    val innerType = tpt.args(0)
                     tpt.tpt.toString match {
-                        case "List" => samplePool.getList(innerType)
-                        case "Option" => samplePool.getOption(innerType)
-                        case "Seq" => samplePool.getList(innerType)
+                        case "List" => {
+                            val (length, newSamplePool) = samplePool.nextSeqLength
+                            if (length == 0)
+                                Some(Ident(newTermName("Nil")), newSamplePool)
+                            else {
+                                val innerSamplesOpt = (0 until length).map{ useless => innerType.sampleValue(classDefs, newSamplePool)}
+                                if (innerSamplesOpt.exists(_.isEmpty)) None
+                                else {
+                                    val innerSamples = innerSamplesOpt.map(_.get._1)
+                                    val tree = Apply(Ident(newTermName("List")), innerSamples.toList)
+                                    Some(tree, newSamplePool)
+                                }
+                            }
+                        }
+                        case "Option" => {
+                            val (isSome, newSamplePool) = samplePool.nextOptionIsSome
+                            if (isSome)
+                                innerType.sampleValue(classDefs, newSamplePool).map { case (innerValue, newNewSamplePool) =>
+                                    val tree = Apply(Ident(newTermName("Some")), List(innerValue))
+                                    (tree, newNewSamplePool)
+                                }
+                            else
+                                Some(Ident(newTermName("None")), newSamplePool)
+                        }
+                        case "Seq" => {
+                            val (length, newSamplePool) = samplePool.nextSeqLength
+                            if (length == 0)
+                                Some(Ident(newTermName("Nil")), newSamplePool)
+                            else {
+                                val innerSamplesOpt = (0 until length).map(useless => innerType.sampleValue(classDefs, newSamplePool))
+                                if (innerSamplesOpt.exists(_.isEmpty)) None
+                                else {
+                                    val innerSamples = innerSamplesOpt.map(_.get._1)
+                                    val tree = Apply(Ident(newTermName("Seq")), innerSamples.toList)
+                                    Some(tree, newSamplePool)
+                                }
+                            }
+                        }
                         case _ => None
                     }
                 }
                 // wildCardGeneric is not working because Any from existential type is represented as scala.Any instead
                 // of just Any
                 case tpt: ExistentialTypeTree => {
+                    // TODO: Remove hard coding for only one type param
+                    // Probably fixed by removing the 0 index retrieval and the list construction
                     val upperBound = tpt.whereClauses(0).asInstanceOf[TypeDef].rhs.asInstanceOf[TypeBoundsTree].hi
-                    upperBound.sampleValue(classDefs, samplePool)
+                    // Let's exract the AppliedTypeTree from this Existential and replace the type argument
+                    // with the upper bound of the where clause
+                    val innerType = tpt.tpt.asInstanceOf[AppliedTypeTree]
+                    val simplified = AppliedTypeTree(innerType.tpt, List(upperBound))
+                    simplified.sampleValue(classDefs, samplePool)
                 }
-
+                case tpt: Select => samplePool.get(tpt.name.toString).orElse(assignCaseClassSampleValue)
                 case tpt => samplePool.get(tpt.toString).orElse(assignCaseClassSampleValue)
             }
         }
@@ -250,25 +291,14 @@ object ScalaCodeSheet {
 }
 
 case class SamplePool(values: Map[String, Stream[Tree]], seqLengths: Stream[Int], someOrNone: Stream[Boolean]) {
+
     def get(type_ : String): Option[(Tree, SamplePool)] =
         values.get(type_).map { stream => 
             (stream.head, this.copy(values = values.updated(type_, stream.tail)))
         }
-    def getList(type_ : String): Option[(Tree, SamplePool)] =
-        values.get(type_).map { valuesForType =>
-            val (innerSamples, rest) = valuesForType.splitAt(seqLengths.head)
-            val sample =
-                if (seqLengths.head == 0)
-                    Ident(newTermName("Nil"))
-                else
-                    Apply(Ident(newTermName("List")), innerSamples.toList)
-            (sample, this.copy( values = values.updated(type_, rest), seqLengths = seqLengths.tail))
-        }
-    def getOption(type_ : String): Option[(Tree, SamplePool)] =
-        values.get(type_).map { valuesForType =>
-            val (sample, newValues) =
-              if (someOrNone.head) (Apply(Ident(newTermName("Some")), List(valuesForType.head)), values.updated(type_, valuesForType.tail))
-              else (Ident(newTermName("None")), values)
-            (sample, this.copy(values = newValues, someOrNone = someOrNone.tail))
-        }
+
+    def nextSeqLength: (Int, SamplePool) = (seqLengths.head, this.copy(seqLengths = seqLengths.tail))
+
+    def nextOptionIsSome: (Boolean, SamplePool) = (someOrNone.head, this.copy(someOrNone = someOrNone.tail))
+
 }
