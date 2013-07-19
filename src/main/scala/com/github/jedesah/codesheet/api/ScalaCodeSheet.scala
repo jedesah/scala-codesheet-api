@@ -55,7 +55,7 @@ object ScalaCodeSheet {
                     case valDef: ValDef => !sampleValues.exists( sampleValDef => sampleValDef.name == valDef.name)
                     case other => other != constructor
                 }
-                // If there is nothing left (it's of the form case class Foo(bar: String, biz: Int)), don't bother
+                // If there is nothing left, ie it's of the form case class Foo(bar: String, biz: Int), don't bother
                 if (body.isEmpty) outputResult
                 else {
                     val newOutput = body.foldLeft(outputResult) { (result, child) =>
