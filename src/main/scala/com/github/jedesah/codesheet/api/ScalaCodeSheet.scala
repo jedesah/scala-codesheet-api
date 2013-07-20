@@ -256,7 +256,13 @@ object ScalaCodeSheet {
     def paramList(valDefs: List[ValDef]):String = {
         // Not sure if this is necessary anymore
         //val list:String = sampleValues.map( valDef => valDef.name + " = " + prettyPrint(valDef.rhs)).mkString(", ")
-        val insideParenthesis = valDefs.map(_.toString.drop(4)).mkString(", ")
+
+        // This will remove modifiers and type declarations because these things would not appear in a param
+        // list at the call site
+        // Specifically this is necessary beacuse valDefs with default values as returned
+        // unchaged in the sample generation process and they have type annotation that we do not want
+        val valDefsNoType = valDefs.map(valDef => ValDef(Modifiers(), valDef.name, TypeTree(), valDef.rhs))
+        val insideParenthesis = valDefsNoType.map(_.toString.drop(4)).mkString(", ")
         if (insideParenthesis.isEmpty) "" else s"($insideParenthesis)"
     }
 
