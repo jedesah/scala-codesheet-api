@@ -337,7 +337,7 @@ class ScalaCodeSheetSpec extends Specification {
 								|	val aabb = List(1,2,4,5).take(2)
 								|	def wtv(a: Int) = aabb.drop(a)
 								| }""".stripMargin
-					val expected = List("""Car(model = "foo", year = 3) {""", "aabb = List(1,2)", "wtv(a = 3) => List()", "}")
+					val expected = List("""Car(model = "foo", year = 3) {""", "aabb = List(1, 2)", "wtv(a = 3) => List()", "}")
 					ScalaCodeSheet.computeResults(code) ==== expected
 				}
 			}
