@@ -324,6 +324,22 @@ class ScalaCodeSheetSpec extends Specification {
 								| }""".stripMargin
 					ScalaCodeSheet.computeResults(code) ==== List("", "", "")
 				}
+				"4" in {
+					val code = """case class Car(model: String, year: Int) {
+								|	val a = 5
+								|	val b = (a + year).toString + model
+								| }""".stripMargin
+					val expected = List("""Car(model = "foo", year = 3) {""", "", "b = 8foo", "}")
+					ScalaCodeSheet.computeResults(code) ==== expected
+				}
+				"5" in {
+					val code = """case class Car(model: String, year: Int) {
+								|	val aabb = List(1,2,4,5).take(2)
+								|	def wtv(a: Int) = aabb.drop(a)
+								| }""".stripMargin
+					val expected = List("""Car(model = "foo", year = 3) {""", "aabb = List(1,2)", "wtv(a = 3) => List()", "}")
+					ScalaCodeSheet.computeResults(code) ==== expected
+				}
 			}
 		}
 
