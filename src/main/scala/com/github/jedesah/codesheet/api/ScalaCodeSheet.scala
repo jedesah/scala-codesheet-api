@@ -57,8 +57,14 @@ object ScalaCodeSheet {
                 if (body.isEmpty) outputResult
                 else {
                     val newOutput = body.foldLeft(outputResult) { (result, child) =>
-                        val otherMembers = body.diff(Seq(child))
-                        val allSymbols: List[Tree] = ((symbols ::: sampleValues) :+ classDef) ::: otherMembers
+                        // One (such as myself) might think it would be a good idea to remove the current
+                        // member from the body (list of members) and only supply all other members
+                        // but it turns out that because of potential circular dependencies and recursive function
+                        // definitions that it is better to just supply them all including the member we are currently
+                        // evaluating.
+                        // We only grab the rhs of the current member when evaluating so, it's not like
+                        // the compiler is going to complain about a duplicate definition.
+                        val allSymbols: List[Tree] = ((symbols ::: sampleValues) :+ classDef) ::: body
                         evaluate(child, result, toolBox, allSymbols)
                     }
                     if (newOutput == outputResult) outputResult
@@ -78,7 +84,7 @@ object ScalaCodeSheet {
             if (isSimpleExpression(defdef.rhs)) outputResult
             else {
                 defdef.sampleParamsOption(classDefs) map { case (sampleValues, _) =>
-                    val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues :+ defdef).toString
+                    val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues).toString
                     val signature:String = defdef.name + paramList(sampleValues):String
                     val output = s"$signature => $sampleResult"
                     updateOutput(newOutput = output)
