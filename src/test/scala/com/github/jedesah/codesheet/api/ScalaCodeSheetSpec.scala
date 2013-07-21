@@ -326,5 +326,35 @@ class ScalaCodeSheetSpec extends Specification {
 				}
 			}
 		}
+
+		"object definition" in {
+			"with only simple values" in {
+				val code = """object MySingleton {
+							|	val a = 5
+							|	val tretre = "goo"
+							| }""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("", "", "", "")
+			}
+			"with only values" in {
+				val code = """object MySingleton {
+						|	val a = 5
+						|	val b = a + 4
+						| }""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", "", "b = 9", "}")
+			}
+			"with function definition" in {
+				val code = """object MySingleton {
+							|	def jade(a: String, b: Int) = a + a
+							| }""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", """jade(a = "foo", b = 3) => foofoo""", "}")
+			}
+			"with values and definitions" in {
+				val code = """object MySingleton {
+							|	val aabb = 45 + 12
+							|	def blabla(a: Char) = aabb.toString + a
+							| }""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", "aabb = 57", "blabla(a: 'a') => 57a", "}")
+			}
+		}
 	}
 }
