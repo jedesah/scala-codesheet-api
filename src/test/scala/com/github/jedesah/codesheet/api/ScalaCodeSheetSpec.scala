@@ -372,5 +372,88 @@ class ScalaCodeSheetSpec extends Specification {
 				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", "aabb = 57", "blabla(a: 'a') => 57a", "}")
 			}
 		}
+		"sample generation" in {
+			"abstract class" in {
+				"simple hierarchy" in {
+					val code = """abstract class Animal
+							| case class Cat(a: String) extends Animal
+							| case class Dog(b: Int) extends Animal
+							| def gogo(hui: Animal) = hui.toString""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", "", "", """gogo(hui = Cat("foo")""")
+				}
+				"no concrete class" in {
+					"simple" in {
+						val code = """abstract class Animal
+									| def gogogo(lui: Animal) = 5 + 5""".stripMargin
+						ScalaCodeSheet.computeResults(code) ==== List("", "gogogo(lui = new Animal {}) => 10")
+					}
+					"with abstract members" in {
+						"one value definition" in {
+							val code = """abstract class Animal {
+										|	val y: Int
+										| }
+										| def gogogi(yui: Animal) = yui + 45""".stripMargin
+							ScalaCodeSheet.computeResults(code) ==== List("", "", "", "gogogi(yui = new Animal { val y = 3 }) => 48")
+						}
+						"two values definitions" in {
+							val code = """abstract class Animal {
+										|	val y: Int
+										|	val z: String
+										| }
+										| def gogogi(yui: Animal) = yui.z + (yui.y + 45)""".stripMargin
+							val expected = List("", "", "", "", """gogogi(yui = new Animal { val y = 3; val z = "foo" }) => foo48""")
+							ScalaCodeSheet.computeResults(code) ==== expected
+						}
+						"one function definition" in {
+							val code = """abstract class Animal {
+										|	def y(a: Int): Int
+										| }
+										| def gogogi(yui: Animal) = yui.y(3)""".stripMargin
+							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3 }) => 3")
+							ScalaCodeSheet.computeResults(code) ==== expected
+						}
+						"two function definitions" in {
+							val code = """abstract class Animal {
+										|	def y(a: Int): Int
+										|	def z(b: Char): Boolean
+										| }
+										| def gogogi(yui: Animal) = if (yui.z('a')) yui.y(3) else 7""".stripMargin
+							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3; def z(b: Char) = trye }) => 3")
+							ScalaCodeSheet.computeResults(code) ==== expected
+						}
+					}
+				}
+			}
+			"trait" in {
+				"simple hierarchy" in {
+					val code = """trait Animal
+								| case class Cat(a: Int) extends Animal
+								| case class Dog(b: Boolean) extends Animal
+								| def tti(bb: Animal) = bb.toString""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "tti(bb = Cat(a = 3)) => Cat(3)")
+				}
+				"no concrete class" in {
+					val code = """trait Animal
+								| def tto(bb: Animal) = 5 + 4""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", "tto(bb = new Animal {}) => 9")
+				}
+			}
+		}
+		"???" in {
+			"value definition" in {
+				val code = "val a = ???"
+				ScalaCodeSheet.computeResults(code) ==== List("")
+			}
+			"function definition" in {
+				"no params" in {
+					val code = "def gog = ???"
+					ScalaCodeSheet.computeResults(code) ==== List("")
+				}
+				"with params" in {
+					val code = "def gogg(a: Int) = ???"
+					ScalaCodeSheet.computeResults(code) ==== List("gogg(3) => ???")
+				}
+			}
+		}
 	}
 }
