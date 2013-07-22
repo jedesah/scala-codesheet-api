@@ -245,8 +245,6 @@ object ScalaCodeSheet {
                         case _ => None
                     }
                 }
-                // wildCardGeneric is not working because Any from existential type is represented as scala.Any instead
-                // of just Any
                 case tpt: ExistentialTypeTree => {
                     // TODO: Remove hard coding for only one type param
                     // Probably fixed by removing the 0 index retrieval and the list construction
