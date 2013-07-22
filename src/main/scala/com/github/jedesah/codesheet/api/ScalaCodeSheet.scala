@@ -83,13 +83,14 @@ object ScalaCodeSheet {
             outputResult
         }
         case defdef : DefDef => {
-            if (isSimpleExpression(defdef.rhs) || (defdef.vparamss.isEmpty && defdef.rhs.equalsStructure(notImplSymbol)))
+            val isNotImplemented = defdef.rhs.equalsStructure(notImplSymbol)
+            if (isSimpleExpression(defdef.rhs) || (defdef.vparamss.isEmpty && isNotImplemented))
                 outputResult
             else {
                 defdef.sampleParamsOption(classDefs) map { case (sampleValues, _) =>
-                    val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues).toString
+                    val rhs = if (isNotImplemented) "???" else evaluateWithSymbols(defdef.rhs, sampleValues).toString
                     val signature:String = defdef.name + paramList(sampleValues):String
-                    val output = s"$signature => $sampleResult"
+                    val output = s"$signature => $rhs"
                     updateOutput(newOutput = output)
                 } getOrElse {
                     outputResult
