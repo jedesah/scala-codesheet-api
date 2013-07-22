@@ -9,6 +9,8 @@ import com.github.jedesah.Math
 
 object ScalaCodeSheet {
 
+    val notImplSymbol = Ident(newTermName("$qmark$qmark$qmark"))
+
     def evaluate(AST: Tree, outputResult: List[String], toolBox: ToolBox[reflect.runtime.universe.type], symbols: List[Tree] = Nil): List[String] = {
       lazy val classDefs: Traversable[ClassDef] = symbols.collect{ case elem: ClassDef => elem}
 
@@ -34,7 +36,7 @@ object ScalaCodeSheet {
       AST match {
         // There is what appears to be a bug in Scala 2.10.1 where you cannot use a capital letter in a case statement with a @
         case ast @ ValDef(_, newTermName, _, assignee) => {
-          if (isSimpleExpression(assignee)) outputResult
+          if (isSimpleExpression(assignee) || assignee.equalsStructure(notImplSymbol)) outputResult
           else {
               val evaluatedAssignement = evaluateWithSymbols(assignee)
               val output = s"$newTermName = $evaluatedAssignement"
