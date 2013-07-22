@@ -83,7 +83,8 @@ object ScalaCodeSheet {
             outputResult
         }
         case defdef : DefDef => {
-            if (isSimpleExpression(defdef.rhs)) outputResult
+            if (isSimpleExpression(defdef.rhs) || (defdef.vparamss.isEmpty && defdef.rhs.equalsStructure(notImplSymbol)))
+                outputResult
             else {
                 defdef.sampleParamsOption(classDefs) map { case (sampleValues, _) =>
                     val sampleResult = evaluateWithSymbols(defdef.rhs, sampleValues).toString
