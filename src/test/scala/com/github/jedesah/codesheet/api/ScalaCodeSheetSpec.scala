@@ -451,7 +451,7 @@ class ScalaCodeSheetSpec extends Specification {
 				}
 				"with params" in {
 					val code = "def gogg(a: Int) = ???"
-					ScalaCodeSheet.computeResults(code) ==== List("gogg(3) => ???")
+					ScalaCodeSheet.computeResults(code) ==== List("gogg(a = 3) => ???")
 				}
 			}
 		}
