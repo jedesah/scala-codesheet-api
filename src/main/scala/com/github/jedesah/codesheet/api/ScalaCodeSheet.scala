@@ -185,7 +185,7 @@ object ScalaCodeSheet {
 
         def sampleValue(classDefs: Traversable[ClassDef] = Nil,
                         samplePool: SamplePool = defaultSamplePool): Option[(Tree, SamplePool)] = {
-            def assignCaseClassSampleValue: Option[(Tree, SamplePool)] =
+            def assignValueOfCustomType: Option[(Tree, SamplePool)] =
                 classDefs.find(_.name.toString == tree.toString).map { classDef =>
                     classDef.constructorOption.map { constructorDef =>
                         constructorDef.sampleParamsOption(classDefs, samplePool).map { case (innerValues, newSamplePool) =>
@@ -255,8 +255,8 @@ object ScalaCodeSheet {
                     val simplified = AppliedTypeTree(innerType.tpt, List(upperBound))
                     simplified.sampleValue(classDefs, samplePool)
                 }
-                case tpt: Select => samplePool.get(tpt.name.toString).orElse(assignCaseClassSampleValue)
-                case tpt => samplePool.get(tpt.toString).orElse(assignCaseClassSampleValue)
+                case tpt: Select => samplePool.get(tpt.name.toString).orElse(assignValueOfCustomType)
+                case tpt => samplePool.get(tpt.toString).orElse(assignValueOfCustomType)
             }
         }
     }
