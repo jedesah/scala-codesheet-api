@@ -369,7 +369,7 @@ class ScalaCodeSheetSpec extends Specification {
 							|	val aabb = 45 + 12
 							|	def blabla(a: Char) = aabb.toString + a
 							| }""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", "aabb = 57", "blabla(a: 'a') => 57a", "}")
+				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", "aabb = 57", "blabla(a = 'a') => 57a", "}")
 			}
 		}
 		"sample generation" in {
