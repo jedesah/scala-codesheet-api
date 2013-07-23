@@ -55,28 +55,26 @@ object ScalaCodeSheet {
                     case valDef: ValDef => !sampleValues.exists( sampleValDef => sampleValDef.name == valDef.name)
                     case other => other != constructor
                 }
-                // If there is nothing left, ie it's of the form case class Foo(bar: String, biz: Int), don't bother
-                if (body.isEmpty) outputResult
+                val newOutput = body.foldLeft(outputResult) { (result, child) =>
+                    // One (such as myself) might think it would be a good idea to remove the current
+                    // member from the body (list of members) and only supply all other members
+                    // but it turns out that because of potential circular dependencies and recursive function
+                    // definitions that it is better to just supply them all including the member we are currently
+                    // evaluating.
+                    // We only grab the rhs of the current member when evaluating so, it's not like
+                    // the compiler is going to complain about a duplicate definition.
+                    val allSymbols: List[Tree] = ((symbols ::: sampleValues) :+ classDef) ::: body
+                    evaluate(child, result, toolBox, allSymbols)
+                }
+                // If nothing in the body is worthy of printing (or the body is empty), don't bother
+                // printing surrounding stuff wither
+                if (newOutput == outputResult) outputResult
                 else {
-                    val newOutput = body.foldLeft(outputResult) { (result, child) =>
-                        // One (such as myself) might think it would be a good idea to remove the current
-                        // member from the body (list of members) and only supply all other members
-                        // but it turns out that because of potential circular dependencies and recursive function
-                        // definitions that it is better to just supply them all including the member we are currently
-                        // evaluating.
-                        // We only grab the rhs of the current member when evaluating so, it's not like
-                        // the compiler is going to complain about a duplicate definition.
-                        val allSymbols: List[Tree] = ((symbols ::: sampleValues) :+ classDef) ::: body
-                        evaluate(child, result, toolBox, allSymbols)
-                    }
-                    if (newOutput == outputResult) outputResult
-                    else {
-                        val signature:String = classDef.name + paramList(sampleValues):String
-                        val output = s"$signature {"
-                        val withBefore = updateOutput(newOutput, output)
-                        val lastLine = body.map(_.pos.line).max + 1
-                        updateOutput(withBefore, "}", lastLine)
-                    }
+                    val signature:String = classDef.name + paramList(sampleValues):String
+                    val output = s"$signature {"
+                    val withBefore = updateOutput(newOutput, output)
+                    val lastLine = body.map(_.pos.line).max + 1
+                    updateOutput(withBefore, "}", lastLine)
                 }
             }
         } getOrElse {
