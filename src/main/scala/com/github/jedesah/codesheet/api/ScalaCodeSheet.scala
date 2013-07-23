@@ -33,6 +33,31 @@ object ScalaCodeSheet {
           if (totalSymbols.isEmpty) toolBox.eval(expr)
           else toolBox.eval(Block(totalSymbols.toList :+ expr: _*))
       }
+
+      def evaluateTypeDefBody(name: String, body: List[Tree], classParams: List[ValDef] = Nil): List[String] = {
+            val newOutput = body.foldLeft(outputResult) { (result, child) =>
+                // One (such as myself) might think it would be a good idea to remove the current
+                // member from the body (list of members) and only supply all other members
+                // but it turns out that because of potential circular dependencies and recursive function
+                // definitions that it is better to just supply them all including the member we are currently
+                // evaluating.
+                // We only grab the rhs of the current member when evaluating so, it's not like
+                // the compiler is going to complain about a duplicate definition.
+                val allSymbols: List[Tree] = ((symbols ::: classParams) :+ AST) ::: body
+                evaluate(child, result, toolBox, allSymbols)
+            }
+            // If nothing in the body is worthy of printing (or the body is empty), don't bother
+            // printing surrounding stuff wither
+            if (newOutput == outputResult) outputResult
+            else {
+                val signature:String = name + paramList(classParams):String
+                val output = s"$signature {"
+                val withBefore = updateOutput(newOutput, output)
+                val lastLine = body.map(_.pos.line).max + 1
+                updateOutput(withBefore, "}", lastLine)
+            }
+      }
+
       AST match {
         // There is what appears to be a bug in Scala 2.10.1 where you cannot use a capital letter in a case statement with a @
         case ast @ ValDef(_, newTermName, _, assignee) => {
@@ -55,30 +80,14 @@ object ScalaCodeSheet {
                     case valDef: ValDef => !sampleValues.exists( sampleValDef => sampleValDef.name == valDef.name)
                     case other => other != constructor
                 }
-                val newOutput = body.foldLeft(outputResult) { (result, child) =>
-                    // One (such as myself) might think it would be a good idea to remove the current
-                    // member from the body (list of members) and only supply all other members
-                    // but it turns out that because of potential circular dependencies and recursive function
-                    // definitions that it is better to just supply them all including the member we are currently
-                    // evaluating.
-                    // We only grab the rhs of the current member when evaluating so, it's not like
-                    // the compiler is going to complain about a duplicate definition.
-                    val allSymbols: List[Tree] = ((symbols ::: sampleValues) :+ classDef) ::: body
-                    evaluate(child, result, toolBox, allSymbols)
-                }
-                // If nothing in the body is worthy of printing (or the body is empty), don't bother
-                // printing surrounding stuff wither
-                if (newOutput == outputResult) outputResult
-                else {
-                    val signature:String = classDef.name + paramList(sampleValues):String
-                    val output = s"$signature {"
-                    val withBefore = updateOutput(newOutput, output)
-                    val lastLine = body.map(_.pos.line).max + 1
-                    updateOutput(withBefore, "}", lastLine)
-                }
+                evaluateTypeDefBody(classDef.name.toString, body, sampleValues)
             }
         } getOrElse {
             outputResult
+        }
+        case moduleDef: ModuleDef => {
+            val body = moduleDef.impl.body.filter(!isConstructor(_))
+            evaluateTypeDefBody(moduleDef.name.toString, body)
         }
         case defdef : DefDef => {
             val isNotImplemented = defdef.rhs.equalsStructure(notImplSymbol)
@@ -139,8 +148,17 @@ object ScalaCodeSheet {
       }
     }
 
+    def isConstructor(tree: Tree) = tree match {
+        case defdef: DefDef => defdef.name == nme.CONSTRUCTOR
+        case _ => false
+    }
+
     implicit class AugmentedClassDef(classDef: ClassDef) {
-        val constructorOption = classDef.impl.body.collectFirst{ case defdef: DefDef if defdef.name == nme.CONSTRUCTOR => defdef}
+        val constructorOption = classDef.impl.body.find(isConstructor(_)).asInstanceOf[Option[DefDef]]
+    }
+
+    implicit class AugmentedModuleDef(moduleDef: ModuleDef) {
+        val constructor = moduleDef.impl.body.find(isConstructor(_)).get.asInstanceOf[DefDef]
     }
 
     implicit class DefDefWithSamples(defdef: DefDef) {
