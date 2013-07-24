@@ -48,7 +48,6 @@ class UtilsSpec extends Specification {
 			val simpleExpression = """new Car("BMW", 2013)"""
 			val toolBox = cm.mkToolBox()
 			val tree = toolBox.parse(simpleExpression)
-			println(tree.getClass)
 			ScalaCodeSheet.isSimpleExpression(tree) ==== true
 		}
 	}
