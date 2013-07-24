@@ -207,21 +207,27 @@ object ScalaCodeSheet {
 
         def sampleValue(classDefs: Traversable[ClassDef] = Nil,
                         samplePool: SamplePool = defaultSamplePool): Option[(Tree, SamplePool)] = {
-            def assignValueOfCustomType: Option[(Tree, SamplePool)] =
-                classDefs.find(_.name.toString == tree.toString).map { classDef =>
+            def assignValueOfCustomType: Option[(Tree, SamplePool)] = {
+                import scala.reflect.runtime.universe.Flag._
+                val concretePred = (classDef: ClassDef) => {
+                    val isSameConcreteClass = classDef.name.toString == tree.toString && !classDef.mods.hasFlag(ABSTRACT)
+                    val isSubClass = classDef.impl.parents.exists( (parent: Tree) => { parent.toString == tree.toString})
+                    isSameConcreteClass || isSubClass
+                }
+                classDefs.find(concretePred).map { classDef =>
                     classDef.constructorOption.map { constructorDef =>
                         constructorDef.sampleParamsOption(classDefs, samplePool).map { case (innerValues, newSamplePool) =>
-                            import scala.reflect.runtime.universe.Flag._
                             val isCaseClass = classDef.mods.hasFlag(CASE)
                             val objectConstructionExpression =
                                 if (isCaseClass)
-                                    Apply(Ident(newTermName(tree.toString)), innerValues.map(_.rhs))
+                                    Apply(Ident(newTermName(classDef.name.toString)), innerValues.map(_.rhs))
                                 else
-                                    Apply(Select(New(Ident(newTypeName(tree.toString))), nme.CONSTRUCTOR), innerValues.map(_.rhs))
+                                    Apply(Select(New(Ident(newTypeName(classDef.name.toString))), nme.CONSTRUCTOR), innerValues.map(_.rhs))
                             (objectConstructionExpression, newSamplePool)
                         }
                     }
                 }.flatten.flatten
+            }
             tree match {
                 case tpt: AppliedTypeTree => {
                     val innerType = tpt.args(0)
