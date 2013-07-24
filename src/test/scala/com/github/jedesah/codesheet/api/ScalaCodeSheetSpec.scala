@@ -245,31 +245,45 @@ class ScalaCodeSheetSpec extends Specification {
 					ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 10, c = 1) => 12")
 				}
 				"multiline" in {
-					"1 line" in {
+					"one expression" in {
 						val code = """def foo(a: Int, b: String, c: Boolean) =
 									| 	if (c) a else b.length""".stripMargin
-						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""", "3")
+						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""", "")
 					}
-					"2 line" in {
+					"one expression on 4 lines" in {
 						val code = """def foo(a: Int, b: String, c: Boolean) =
 									| 	if (c)
 									|		a
 									|	else
 									|		b""".stripMargin
-						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""", "true", "3", "", "foo")
+						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""", "", "", "", "")
 					}
-					"more complex" in {
+					"one complex expression on 4 lines" in {
 						val code = """def foo(a: List[Int], b: String, c: String, d: Boolean, e: Boolean) =
 									| 	if (d && e || a.length == 2)
 									|		b.take(2) + c.drop(3)
 									|	else
 									|		b.take(3) + c.drop(1)""".stripMargin
 						val result = List(
-							"""foo(a = List(1,2,3), b = "foo", c = "bar", d = true, e = false) => foobar""",
-							"false",
-							"fba",
+							"""foo(a = List(3, 5, 7), b = "foo", c = "bar", d = true, e = false) => fooar""",
 							"",
-							"foobar"
+							"",
+							"",
+							""
+						)
+						ScalaCodeSheet.computeResults(code) ==== result
+					}
+					"multiple inner value definition" in {
+						val code = """def foo(a: List[Int], b: Int) = {
+									|	val temp = a.take(4)
+									|	val almostDone = b :: temp
+									|	temp.dropRight(1)
+									| }""".stripMargin
+						val result = List(
+							"""foo(a = List(3, 5, 7), b = 11) => List(11, 3, 5)""",
+							"temp = List(3, 5, 7)",
+							"almostDone = List(11, 3, 5, 7)",
+							""
 						)
 						ScalaCodeSheet.computeResults(code) ==== result
 					}
