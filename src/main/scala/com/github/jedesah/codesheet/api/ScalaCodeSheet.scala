@@ -98,7 +98,13 @@ object ScalaCodeSheet {
                     val rhs = if (isNotImplemented) "???" else evaluateWithSymbols(defdef.rhs, sampleValues).toString
                     val signature:String = defdef.name + paramList(sampleValues):String
                     val output = s"$signature => $rhs"
-                    updateOutput(newOutput = output)
+                    val newTotalOutput = updateOutput(newOutput = output)
+                    // If the rhs is a block (contains other interesting value defitions to evalute),
+                    // then delve down recursively, or else, just return the function header output
+                    defdef.rhs match {
+                        case rhs: Block => evaluate(rhs, newTotalOutput, toolBox, symbols ::: sampleValues)
+                        case _ => newTotalOutput
+                    }
                 } getOrElse {
                     outputResult
                 }
