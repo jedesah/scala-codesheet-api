@@ -8,21 +8,28 @@ class ScalaCodeSheetSpec extends Specification {
 			"literal" in {
 				ScalaCodeSheet.computeResults("1") ==== List("1")
 			}
-			"complex" in {
+			"typical" in {
 				ScalaCodeSheet.computeResults("1 + 1") ==== List("2")
 			}
-			"two" in {
-				"no newline" in {
-					val code = """1 + 1
-						| 4 * 4""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("2", "16")
-				}
-				"with newline" in {
-					val code = """1 + 1
-						|
-						| 4 * 4""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("2", "", "16")
-				}
+			"two lines" in {
+				val code = """1 + 1
+							| 4 * 4""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("2", "16")
+			}
+			"with empty line" in {
+				val code = """1 + 1
+					|
+					| 4 * 4""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("2", "", "16")
+			}
+			"expression returning Unit" in {
+				val code = "if (true && false) 34"
+				ScalaCodeSheet.computeResults(code) ==== List("")
+			}
+			"multiline expression" in {
+				val code = """if (true || false)
+							|	45 + 23""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("68", "")
 			}
 		}
 
