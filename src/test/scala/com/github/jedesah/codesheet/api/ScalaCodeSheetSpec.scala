@@ -451,7 +451,7 @@ class ScalaCodeSheetSpec extends Specification {
 								| case class Cat(a: Int) extends Animal
 								| case class Dog(b: Boolean) extends Animal
 								| def tti(bb: Animal) = bb.toString""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "tti(bb = Cat(a = 3)) => Cat(3)")
+					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "tti(bb = Cat(3)) => Cat(3)")
 				}
 				"no concrete class" in {
 					val code = """trait Animal
