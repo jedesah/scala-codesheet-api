@@ -155,21 +155,6 @@ object ScalaCodeSheet {
       }
     }
 
-    def isConstructor(tree: Tree) = tree match {
-        case defdef: DefDef => defdef.name == nme.CONSTRUCTOR
-        case _ => false
-    }
-
-    implicit class AugmentedClassDef(classDef: ClassDef) {
-        val constructorOption = classDef.impl.body.find(isConstructor(_)).asInstanceOf[Option[DefDef]]
-        val isCaseClass = classDef.mods.hasFlag(CASE)
-        val isAbstract = classDef.mods.hasFlag(ABSTRACT)
-    }
-
-    implicit class AugmentedModuleDef(moduleDef: ModuleDef) {
-        val constructor = moduleDef.impl.body.find(isConstructor(_)).get.asInstanceOf[DefDef]
-    }
-
     implicit class DefDefWithSamples(defdef: DefDef) {
         def sampleParamsOption(classDefs: Traversable[ClassDef] = Nil,
                                samplePool: SamplePool = defaultSamplePool): Option[(List[ValDef], SamplePool)] = {
