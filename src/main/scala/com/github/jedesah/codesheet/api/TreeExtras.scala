@@ -18,6 +18,6 @@ package object api {
 	}
 
 	implicit class AugmentedModuleDef(moduleDef: ModuleDef) {
-		val constructor = moduleDef.impl.body.find(isConstructor(_)).get.asInstanceOf[DefDef]
+		val constructor = moduleDef.impl.body.find(isConstructor).get.asInstanceOf[DefDef]
 	}
 }
