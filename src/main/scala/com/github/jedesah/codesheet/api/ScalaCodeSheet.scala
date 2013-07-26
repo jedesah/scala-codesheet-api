@@ -4,6 +4,7 @@ import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.universe._
 import scala.tools.reflect.ToolBox
 import scala.tools.reflect.ToolBoxError
+import scala.reflect.runtime.universe.Flag._
 
 import com.github.jedesah.Math
 
@@ -121,14 +122,14 @@ object ScalaCodeSheet {
       }
     }
 
-    // Not sure if I need this anymore
-    /*def prettyPrint(tree: Tree): String = tree match {
-      case tree: Apply => tree.fun match {
-          case fun: Select => fun.qualifier.toString + "(" + tree.args.mkString(", ") + ")"
-          case fun: Ident => fun.toString + "(" + tree.args.mkString(", ") + ")"
-      }
-      case _ => tree.toString
-    }*/
+    def prettyPrint(tree: Tree): String = {
+        // I believe this is not necessary anymore
+        /*case tree: Apply => tree.fun match {
+            case fun: Select => fun.qualifier.toString + "(" + tree.args.mkString(", ") + ")"
+            case fun: Ident => fun.toString + "(" + tree.args.mkString(", ") + ")"
+        }*/
+        anonParentName(tree).map( name => s"new $name {}").getOrElse(tree.toString)
+    }
 
     def isSimpleExpression(tree: Tree): Boolean = tree match {
         case _ : Literal => true
@@ -161,6 +162,8 @@ object ScalaCodeSheet {
 
     implicit class AugmentedClassDef(classDef: ClassDef) {
         val constructorOption = classDef.impl.body.find(isConstructor(_)).asInstanceOf[Option[DefDef]]
+        val isCaseClass = classDef.mods.hasFlag(CASE)
+        val isAbstract = classDef.mods.hasFlag(ABSTRACT)
     }
 
     implicit class AugmentedModuleDef(moduleDef: ModuleDef) {
@@ -207,22 +210,28 @@ object ScalaCodeSheet {
 
         def sampleValue(classDefs: Traversable[ClassDef] = Nil,
                         samplePool: SamplePool = defaultSamplePool): Option[(Tree, SamplePool)] = {
+
             def assignValueOfCustomType: Option[(Tree, SamplePool)] = {
-                import scala.reflect.runtime.universe.Flag._
                 val concretePred = (classDef: ClassDef) => {
-                    val isSameConcreteClass = classDef.name.toString == tree.toString && !classDef.mods.hasFlag(ABSTRACT)
+                    val isSameConcreteClass = classDef.name.toString == tree.toString && !classDef.isAbstract
                     val isSubClass = classDef.impl.parents.exists( (parent: Tree) => { parent.toString == tree.toString})
                     isSameConcreteClass || isSubClass
                 }
-                classDefs.find(concretePred).map { classDef =>
+                val abstractPred = (classDef: ClassDef) => {
+                    classDef.name.toString == tree.toString && classDef.isAbstract
+                }
+                // TODO: Consider possibility that an object could extend an abstract type and be of use here
+                classDefs.find(concretePred).orElse(classDefs.find(abstractPred)).map { classDef =>
                     classDef.constructorOption.map { constructorDef =>
                         constructorDef.sampleParamsOption(classDefs, samplePool).map { case (innerValues, newSamplePool) =>
-                            val isCaseClass = classDef.mods.hasFlag(CASE)
                             val objectConstructionExpression =
-                                if (isCaseClass)
+                                if (classDef.isAbstract)
+                                    anonClass(classDef.name.toString)
+                                else if (classDef.isCaseClass)
                                     Apply(Ident(newTermName(classDef.name.toString)), innerValues.map(_.rhs))
                                 else
                                     Apply(Select(New(Ident(newTypeName(classDef.name.toString))), nme.CONSTRUCTOR), innerValues.map(_.rhs))
+
                             (objectConstructionExpression, newSamplePool)
                         }
                     }
@@ -290,16 +299,21 @@ object ScalaCodeSheet {
     }
 
     def paramList(valDefs: List[ValDef]):String = {
-        // Not sure if this is necessary anymore
-        //val list:String = sampleValues.map( valDef => valDef.name + " = " + prettyPrint(valDef.rhs)).mkString(", ")
-
         // This will remove modifiers and type declarations because these things would not appear in a param
         // list at the call site
         // Specifically this is necessary beacuse valDefs with default values as returned
         // unchaged in the sample generation process and they have type annotation that we do not want
-        val valDefsNoType = valDefs.map(valDef => ValDef(Modifiers(), valDef.name, TypeTree(), valDef.rhs))
-        val insideParenthesis = valDefsNoType.map(_.toString.drop(4)).mkString(", ")
+        val insideParenthesis = valDefs.map( valDef => valDef.name + " = " + prettyPrint(valDef.rhs) ).mkString(", ")
         if (insideParenthesis.isEmpty) "" else s"($insideParenthesis)"
+    }
+
+    def anonClass(name: String) = Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName(name))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(())))), EmptyTree)))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), List()))
+    def anonParentName(tree: Tree): Option[String] = tree match {
+        case block: Block => block.children(0) match {
+            case classDef: ClassDef => Some(classDef.impl.parents(0).toString)
+            case _ => None
+        }
+        case _ => None
     }
 
     // I don't like the fact that 2 + 3 = 5 which is why I'd rather
