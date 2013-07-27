@@ -74,18 +74,22 @@ object ScalaCodeSheet {
         case expr: Block => expr.children.inits.toList.reverse.drop(1).foldLeft(outputResult) { (result, childs) =>
             evaluate(childs.last, result, toolBox, symbols ++ childs.init)
         }
-        case classDef : ClassDef => classDef.constructorOption.flatMap { constructor =>
-            constructor.sampleParamsOption(classDefs).map { case (sampleValues, _) =>
-                // We remove the value defintions resulting from the class parameters and the primary constructor
-                val body = classDef.impl.body.filter {
-                    case valDef: ValDef => !sampleValues.exists( sampleValDef => sampleValDef.name == valDef.name)
-                    case other => other != constructor
+        case classDef: ClassDef =>
+            // TODO: Handle abstract classes in a more awesome way than ignoring them
+            if (classDef.isAbstract) outputResult
+            else
+                classDef.constructorOption.flatMap { constructor =>
+                    constructor.sampleParamsOption(classDefs).map { case (sampleValues, _) =>
+                        // We remove the value defintions resulting from the class parameters and the primary constructor
+                        val body = classDef.impl.body.filter {
+                            case valDef: ValDef => !sampleValues.exists( sampleValDef => sampleValDef.name == valDef.name)
+                            case other => other != constructor
+                        }
+                        evaluateTypeDefBody(classDef.name.toString, body, sampleValues)
+                    }
+                } getOrElse {
+                    outputResult
                 }
-                evaluateTypeDefBody(classDef.name.toString, body, sampleValues)
-            }
-        } getOrElse {
-            outputResult
-        }
         case moduleDef: ModuleDef => {
             val body = moduleDef.impl.body.filter(!isConstructor(_))
             evaluateTypeDefBody(moduleDef.name.toString, body)
