@@ -362,6 +362,12 @@ class ScalaCodeSheetSpec extends Specification {
 					ScalaCodeSheet.computeResults(code) ==== expected
 				}
 			}
+			"abstract" in {
+				val code = """abstract class Pug {
+							|	val a: Int
+							| }""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("", "", "")
+			}
 		}
 
 		"object definition" in {
