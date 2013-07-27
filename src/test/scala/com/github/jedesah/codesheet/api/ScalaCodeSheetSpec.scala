@@ -419,7 +419,7 @@ class ScalaCodeSheetSpec extends Specification {
 							val code = """abstract class Animal {
 										|	val y: Int
 										| }
-										| def gogogi(yui: Animal) = yui + 45""".stripMargin
+										| def gogogi(yui: Animal) = yui.y + 45""".stripMargin
 							ScalaCodeSheet.computeResults(code) ==== List("", "", "", "gogogi(yui = new Animal { val y = 3 }) => 48")
 						}
 						"two value definitions" in {
