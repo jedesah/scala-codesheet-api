@@ -363,10 +363,25 @@ class ScalaCodeSheetSpec extends Specification {
 				}
 			}
 			"abstract" in {
-				val code = """abstract class Pug {
-							|	val a: Int
-							| }""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("", "", "")
+				"one value definition" in {
+					val code = """abstract class Pug {
+								|	val a: Int
+								| }""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", "", "")
+				}
+				"one function definition" in {
+					val code = """abstract class Pet {
+								|	def af(g: Int): Boolean
+								| }""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", "", "")
+				}
+				"one function definition followed by evaluated expression" in {
+					val code = """abstract class Pet {
+								|	def af(g: Int): Boolean
+								| }
+								| val a = 5 + 5""".stripMargin
+					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "a = 10")
+				}
 			}
 		}
 
