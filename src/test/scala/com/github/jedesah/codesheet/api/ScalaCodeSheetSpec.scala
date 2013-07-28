@@ -445,7 +445,7 @@ class ScalaCodeSheetSpec extends Specification {
 										|	def z(b: Char): Boolean
 										| }
 										| def gogogi(yui: Animal) = if (yui.z('a')) yui.y(3) else 7""".stripMargin
-							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3; def z(b: Char) = trye }) => 3")
+							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3; def z(b: Char) = true }) => 3")
 							ScalaCodeSheet.computeResults(code) ==== expected
 						}
 					}
