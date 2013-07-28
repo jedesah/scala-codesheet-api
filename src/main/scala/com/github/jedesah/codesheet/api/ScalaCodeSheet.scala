@@ -132,7 +132,10 @@ object ScalaCodeSheet {
             case fun: Select => fun.qualifier.toString + "(" + tree.args.mkString(", ") + ")"
             case fun: Ident => fun.toString + "(" + tree.args.mkString(", ") + ")"
         }*/
-        anonParentName(tree).map( name => s"new $name {}").getOrElse(tree.toString)
+        deconstructAnonymous(tree).map { case(name, body) =>
+            val bodyString = if (body.isEmpty) "{}" else s"""{ ${body.mkString("; ")} }"""
+            s"new $name $bodyString"
+        }.getOrElse(tree.toString)
     }
 
     def isSimpleExpression(tree: Tree): Boolean = tree match {
@@ -213,18 +216,30 @@ object ScalaCodeSheet {
                 classDefs.find(concretePred).orElse(classDefs.find(abstractPred)).map { classDef =>
                     classDef.constructorOption.map { constructorDef =>
                         constructorDef.sampleParamsOption(classDefs, samplePool).map { case (innerValues, newSamplePool) =>
-                            val objectConstructionExpression =
-                                if (classDef.isAbstract)
-                                    anonClass(classDef.name.toString)
+                            val objectConstructionExpressionOption =
+                                if (classDef.isAbstract) {
+                                    val implementedMembersOption: List[Option[(ValOrDefDef, SamplePool)]] = classDef.abstractMembers.map {
+                                        case valDef: ValDef => valDef.withSampleValue(classDefs, samplePool)
+                                        case defDef: DefDef => defDef.tpt.sampleValue(classDefs, samplePool).map { case (sampleImpl, samplePool) =>
+                                            val newDefDef = DefDef(defDef.mods, defDef.name, List(), defDef.vparamss, defDef.tpt, sampleImpl)
+                                            (newDefDef, samplePool)
+                                        }
+                                    }
+                                    if (implementedMembersOption.exists(_.isEmpty)) None
+                                    else {
+                                        val implementedMembers = implementedMembersOption.map(_.get._1)
+                                        Some(anonClass(classDef.name.toString, implementedMembers))
+                                    }
+                                }
                                 else if (classDef.isCaseClass)
-                                    Apply(Ident(newTermName(classDef.name.toString)), innerValues.map(_.rhs))
+                                    Some(Apply(Ident(newTermName(classDef.name.toString)), innerValues.map(_.rhs)))
                                 else
-                                    Apply(Select(New(Ident(newTypeName(classDef.name.toString))), nme.CONSTRUCTOR), innerValues.map(_.rhs))
+                                    Some(Apply(Select(New(Ident(newTypeName(classDef.name.toString))), nme.CONSTRUCTOR), innerValues.map(_.rhs)))
 
-                            (objectConstructionExpression, newSamplePool)
+                            objectConstructionExpressionOption.map((_, newSamplePool))
                         }
                     }
-                }.flatten.flatten
+                }.flatten.flatten.flatten
             }
             tree match {
                 case tpt: AppliedTypeTree => {
@@ -296,10 +311,14 @@ object ScalaCodeSheet {
         if (insideParenthesis.isEmpty) "" else s"($insideParenthesis)"
     }
 
-    def anonClass(name: String) = Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName(name))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(())))), EmptyTree)))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), List()))
-    def anonParentName(tree: Tree): Option[String] = tree match {
+    def anonClass(name: String, impl: List[ValOrDefDef] = Nil) = Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName(name))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(())))), EmptyTree) ::: impl))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), Nil))
+    def deconstructAnonymous(tree: Tree): Option[(String, List[ValOrDefDef])] = tree match {
         case block: Block => block.children(0) match {
-            case classDef: ClassDef => Some(classDef.impl.parents(0).toString)
+            case classDef: ClassDef => {
+                val parentName = classDef.impl.parents(0).toString
+                val body = classDef.impl.body.collect { case valOrDef: ValOrDefDef if !isConstructor(valOrDef) => valOrDef }
+                Some((parentName, body))
+            }
             case _ => None
         }
         case _ => None
@@ -312,7 +331,8 @@ object ScalaCodeSheet {
     val sampleStringValues = "\"foo\"" #:: "\"bar\"" #:: "\"biz\"" #:: "\"says\"" #:: "\"Hello\"" #:: "\"World\"" #:: "\"bazinga\"" #:: Stream.empty repeat 
     val alphabet = "abcdefghijklmnopqrstuvwxyz"
     val sampleCharValues = (0 until alphabet.length).map(alphabet.charAt(_)).toStream.repeat.map("\'" + _ + "\'")
-    val sampleFloatValues = Math.primeNumbers.map(_ - 0.5).map(_.toString)
+    val sampleDoubleValues = Math.primeNumbers.map(_ - 0.5).map(_.toString)
+    val sampleFloatValues = sampleDoubleValues.map(_ + "f")
     val sampleBooleanValues = (true #:: false #:: Stream.empty).repeat.map(_.toString)
     //val sampleAnyValValues = sampleIntValues.zip5(sampleStringValues, sampleFloatValues, sampleBooleanValues, sampleCharValues).flatten(_.productIterator)
     val sampleAnyValValues = "3" #:: "\'f\'" #:: "true" #:: Stream.empty repeat
@@ -328,7 +348,7 @@ object ScalaCodeSheet {
       "Float" -> sampleFloatValues,
       "Boolean" -> sampleBooleanValues,
       "Long" -> sampleIntValues,
-      "Double" -> sampleFloatValues,
+      "Double" -> sampleDoubleValues,
       "Byte" -> sampleIntValues,
       "Short" -> sampleIntValues,
       "Char" -> sampleCharValues,
