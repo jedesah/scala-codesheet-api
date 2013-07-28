@@ -213,6 +213,7 @@ object ScalaCodeSheet {
                     classDef.name.toString == tree.toString && classDef.isAbstract
                 }
                 // TODO: Consider possibility that an object could extend an abstract type and be of use here
+                // TODO: Handle case where abstract class takes parameters
                 classDefs.find(concretePred).orElse(classDefs.find(abstractPred)).map { classDef =>
                     classDef.constructorOption.map { constructorDef =>
                         constructorDef.sampleParamsOption(classDefs, samplePool).map { case (innerValues, newSamplePool) =>
