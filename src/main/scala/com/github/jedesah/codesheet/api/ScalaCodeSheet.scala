@@ -183,8 +183,8 @@ object ScalaCodeSheet {
         def withSampleValue(classDefs: Traversable[ClassDef] = Nil,
                             samplePool: SamplePool = defaultSamplePool): Option[(ValDef, SamplePool)] =
             if (valDef.rhs.isEmpty)
-                valDef.sampleValue(classDefs, samplePool).map{ case (rhs, newSamplePool) =>
-                  (ValDef(Modifiers(), valDef.name, TypeTree(), rhs), newSamplePool)
+                valDef.sampleValue(classDefs, samplePool).map { case (rhs, newSamplePool) =>
+                    (ValDef(Modifiers(), valDef.name, TypeTree(), rhs), newSamplePool)
                 }
             else
                 Some(valDef, samplePool)
