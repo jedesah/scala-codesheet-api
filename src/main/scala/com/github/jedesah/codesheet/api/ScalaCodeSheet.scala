@@ -213,24 +213,28 @@ object ScalaCodeSheet {
                     classDef.name.toString == tree.toString && classDef.isAbstract
                 }
                 // TODO: Consider possibility that an object could extend an abstract type and be of use here
-                // TODO: Handle case where abstract class takes parameters
-                classDefs.find(concretePred).orElse(classDefs.find(abstractPred)).map { classDef =>
-                    classDef.constructorOption.map { constructorDef =>
-                        constructorDef.sampleParamsOption(classDefs, samplePool).map { case (innerValues, newSamplePool) =>
+                classDefs.find(concretePred).orElse(classDefs.find(abstractPred)).flatMap { classDef =>
+                    def assignAnonClass: Option[Tree] = {
+                        val implementedMembersOption: List[Option[(ValOrDefDef, SamplePool)]] = classDef.abstractMembers.map {
+                            case valDef: ValDef => valDef.withSampleValue(classDefs, samplePool)
+                            case defDef: DefDef => defDef.tpt.sampleValue(classDefs, samplePool).map { case (sampleImpl, samplePool) =>
+                                val newDefDef = DefDef(defDef.mods, defDef.name, List(), defDef.vparamss, defDef.tpt, sampleImpl)
+                                (newDefDef, samplePool)
+                            }
+                        }
+                        if (implementedMembersOption.exists(_.isEmpty)) None
+                        else {
+                            val implementedMembers = implementedMembersOption.map(_.get._1)
+                            Some(anonClass(classDef.name.toString, implementedMembers))
+                        }
+                    }
+                    if (classDef.isTrait) assignAnonClass.map((_, samplePool))
+                    else classDef.constructorOption.flatMap { constructorDef =>
+                        constructorDef.sampleParamsOption(classDefs, samplePool).flatMap { case (innerValues, newSamplePool) =>
                             val objectConstructionExpressionOption =
                                 if (classDef.isAbstract) {
-                                    val implementedMembersOption: List[Option[(ValOrDefDef, SamplePool)]] = classDef.abstractMembers.map {
-                                        case valDef: ValDef => valDef.withSampleValue(classDefs, samplePool)
-                                        case defDef: DefDef => defDef.tpt.sampleValue(classDefs, samplePool).map { case (sampleImpl, samplePool) =>
-                                            val newDefDef = DefDef(defDef.mods, defDef.name, List(), defDef.vparamss, defDef.tpt, sampleImpl)
-                                            (newDefDef, samplePool)
-                                        }
-                                    }
-                                    if (implementedMembersOption.exists(_.isEmpty)) None
-                                    else {
-                                        val implementedMembers = implementedMembersOption.map(_.get._1)
-                                        Some(anonClass(classDef.name.toString, implementedMembers))
-                                    }
+                                    // TODO: Handle case where abstract class takes parameters
+                                    assignAnonClass
                                 }
                                 else if (classDef.isCaseClass)
                                     Some(Apply(Ident(newTermName(classDef.name.toString)), innerValues.map(_.rhs)))
@@ -240,7 +244,7 @@ object ScalaCodeSheet {
                             objectConstructionExpressionOption.map((_, newSamplePool))
                         }
                     }
-                }.flatten.flatten.flatten
+                }
             }
             tree match {
                 case tpt: AppliedTypeTree => {

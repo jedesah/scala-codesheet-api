@@ -14,6 +14,7 @@ package object api {
 		val constructorOption = classDef.impl.body.find(isConstructor).asInstanceOf[Option[DefDef]]
 		val isCaseClass = classDef.mods.hasFlag(CASE)
 		val isAbstract = classDef.mods.hasFlag(ABSTRACT)
+		val isTrait = classDef.mods.hasFlag(INTERFACE) && classDef.mods.hasFlag(ABSTRACT)
 		val abstractMembers = classDef.impl.body.collect { case def_ : ValOrDefDef if def_.rhs.isEmpty => def_ }
 	}
 
