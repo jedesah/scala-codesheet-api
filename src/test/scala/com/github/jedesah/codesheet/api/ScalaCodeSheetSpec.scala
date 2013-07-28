@@ -475,9 +475,46 @@ class ScalaCodeSheetSpec extends Specification {
 					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "tti(bb = Cat(3)) => Cat(3)")
 				}
 				"no concrete class" in {
-					val code = """trait Animal
-								| def tto(bb: Animal) = 5 + 4""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "tto(bb = new Animal {}) => 9")
+					"simple" in {
+						val code = """trait Animal
+									| def tto(bb: Animal) = 5 + 4""".stripMargin
+						ScalaCodeSheet.computeResults(code) ==== List("", "tto(bb = new Animal {}) => 9")
+					}
+					"with abstract members" in {
+						"one value definition" in {
+							val code = """trait Animal {
+										|	val y: Int
+										| }
+										| def gogogi(yui: Animal) = yui.y + 45""".stripMargin
+							ScalaCodeSheet.computeResults(code) ==== List("", "", "", "gogogi(yui = new Animal { val y = 3 }) => 48")
+						}
+						"two value definitions" in {
+							val code = """trait Animal {
+										|	val y: Int
+										|	val z: String
+										| }
+										| def gogogi(yui: Animal) = yui.z + (yui.y + 45)""".stripMargin
+							val expected = List("", "", "", "", """gogogi(yui = new Animal { val y = 3; val z = "foo" }) => foo48""")
+							ScalaCodeSheet.computeResults(code) ==== expected
+						}
+						"one function definition" in {
+							val code = """trait Animal {
+										|	def y(a: Int): Int
+										| }
+										| def gogogi(yui: Animal) = yui.y(3)""".stripMargin
+							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3 }) => 3")
+							ScalaCodeSheet.computeResults(code) ==== expected
+						}
+						"two function definitions" in {
+							val code = """trait Animal {
+										|	def y(a: Int): Int
+										|	def z(b: Char): Boolean
+										| }
+										| def gogogi(yui: Animal) = if (yui.z('a')) yui.y(3) else 7""".stripMargin
+							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3; def z(b: Char) = true }) => 3")
+							ScalaCodeSheet.computeResults(code) ==== expected
+						}
+					}
 				}
 			}
 		}
