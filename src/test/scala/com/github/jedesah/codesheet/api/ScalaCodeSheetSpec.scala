@@ -108,7 +108,7 @@ class ScalaCodeSheetSpec extends Specification {
 					}
 					"Seq" in {
 						val code = "def foo(a: Seq[Boolean], b: Seq[Boolean], c: Seq[Boolean]) = if (c.isEmpty) a.length else b.take(1)"
-						ScalaCodeSheet.computeResults(code) ==== List("foo(a = List(true, false, true), b = Nil, c = List(false)) => List()")
+						ScalaCodeSheet.computeResults(code) ==== List("foo(a = Seq(true, false, true), b = Nil, c = Seq(false)) => List()")
 					}
 					"wildCardGeneric" in {
 						val code = "def foo(a: List[_], b: List[_], c: List[_]) = if (c.nonEmpty) a else b"
