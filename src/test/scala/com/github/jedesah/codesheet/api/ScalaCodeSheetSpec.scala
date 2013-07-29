@@ -232,7 +232,17 @@ class ScalaCodeSheetSpec extends Specification {
 							ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = new Car(3, "foo")) => foo-3""")
 						}
 						"three" in {
-							pending
+							val code = """class Car(val year: Int, val model: String)
+										| class Hut(oui: Boolean, tot: String)
+										| class Fat(var calorie: Int, var heat: Int)
+										| def foo(a: Car, b: Hut, c: Fat) = a.model + "-" + a.year""".stripMargin
+							var result = List(
+								"",
+								"",
+								"",
+								"""foo(a = new Car(3, "foo"), b = new Hut(true, "bar"), c = new Fat(5, 7)) => foo-3"""
+							)
+							ScalaCodeSheet.computeResults(code) ==== result
 						}
 					}
 				}
