@@ -287,12 +287,13 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = """def foo(a: List[Int], b: Int) = {
 									|	val temp = a.take(4)
 									|	val almostDone = b :: temp
-									|	temp.dropRight(1)
+									|	almostDone.dropRight(1)
 									| }""".stripMargin
 						val result = List(
 							"""foo(a = List(3, 5, 7), b = 11) => List(11, 3, 5)""",
 							"temp = List(3, 5, 7)",
 							"almostDone = List(11, 3, 5, 7)",
+							"",
 							""
 						)
 						ScalaCodeSheet.computeResults(code) ==== result
