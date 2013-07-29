@@ -546,7 +546,9 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 		}
 		"import" in {
-			pending
+			val code = """import scala.util.Random
+						| if (Random.nextBoolean) 10 else 10""".stripMargin
+			ScalaCodeSheet.computeResults(code) ==== List("", "10")
 		}
 	}
 }
