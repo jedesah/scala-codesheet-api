@@ -462,7 +462,7 @@ class ScalaCodeSheetSpec extends Specification {
 										|	def y(a: Int): Int
 										| }
 										| def gogogi(yui: Animal) = yui.y(3)""".stripMargin
-							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3 }) => 3")
+							val expected = List("", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3 }) => 3")
 							ScalaCodeSheet.computeResults(code) ==== expected
 						}
 						"two function definitions" in {
@@ -513,7 +513,7 @@ class ScalaCodeSheetSpec extends Specification {
 										|	def y(a: Int): Int
 										| }
 										| def gogogi(yui: Animal) = yui.y(3)""".stripMargin
-							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3 }) => 3")
+							val expected = List("", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3 }) => 3")
 							ScalaCodeSheet.computeResults(code) ==== expected
 						}
 						"two function definitions" in {
