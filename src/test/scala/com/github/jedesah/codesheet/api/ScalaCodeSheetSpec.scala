@@ -545,5 +545,8 @@ class ScalaCodeSheetSpec extends Specification {
 				}
 			}
 		}
+		"import" in {
+			pending
+		}
 	}
 }
