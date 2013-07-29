@@ -218,8 +218,7 @@ object ScalaCodeSheet {
                         val implementedMembersOption: List[Option[ValOrDefDef]] = classDef.abstractMembers.map {
                             case valDef: ValDef => valDef.withSampleValue(classDefs, samplePool)
                             case defDef: DefDef => defDef.tpt.sampleValue(classDefs, samplePool).map { sampleImpl =>
-                                val newDefDef = DefDef(defDef.mods, defDef.name, List(), defDef.vparamss, defDef.tpt, sampleImpl)
-                                newDefDef
+                                DefDef(Modifiers(), defDef.name, List(), defDef.vparamss, TypeTree(), sampleImpl)
                             }
                         }
                         if (implementedMembersOption.exists(_.isEmpty)) None
