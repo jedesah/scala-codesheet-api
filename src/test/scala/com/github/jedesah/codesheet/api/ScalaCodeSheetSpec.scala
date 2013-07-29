@@ -293,7 +293,7 @@ class ScalaCodeSheetSpec extends Specification {
 							"""foo(a = List(3, 5, 7), b = 11) => List(11, 3, 5)""",
 							"temp = List(3, 5, 7)",
 							"almostDone = List(11, 3, 5, 7)",
-							"",
+							"List(11, 3, 5)",
 							""
 						)
 						ScalaCodeSheet.computeResults(code) ==== result
