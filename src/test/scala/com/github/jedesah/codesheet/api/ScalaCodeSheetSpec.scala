@@ -546,9 +546,17 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 		}
 		"import" in {
-			val code = """import scala.util.Random
-						| if (Random.nextBoolean) 10 else 10""".stripMargin
-			ScalaCodeSheet.computeResults(code) ==== List("", "10")
+			"simple" in {
+				val code = """import scala.util.Random
+							| if (Random.nextBoolean) 10 else 10""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("", "10")
+			}
+			"relative" in {
+				val code = """import scala._
+							| import util.Random
+							| if (Random.nextBoolean) 10 else 10""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("", "import scala.util.Random", "10")
+			}
 		}
 	}
 }
