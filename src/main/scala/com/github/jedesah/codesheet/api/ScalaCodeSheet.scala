@@ -16,9 +16,8 @@ object ScalaCodeSheet {
       lazy val classDefs: Traversable[ClassDef] = symbols.collect{ case elem: ClassDef => elem}
 
       def updateOutput(oldOutput: List[String] = outputResult, newOutput: String, line: Int = AST.pos.line) = {
-          // -1 because the in memory compiler wraps the code in curly braces to form a block
           // -1 because we are dealing with a zero based collection but 1 based lines in the string
-          val index = line - 2
+          val index = line - 1
           val previousOutputOnLine = oldOutput(index)
           // We could conceivably have more than one result on a single line
           val updatedOutput = if (previousOutputOnLine == "") newOutput else previousOutputOnLine + " ; " + newOutput
