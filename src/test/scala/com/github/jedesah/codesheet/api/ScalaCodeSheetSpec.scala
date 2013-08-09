@@ -31,6 +31,9 @@ class ScalaCodeSheetSpec extends Specification {
 							|	45 + 23""".stripMargin
 				ScalaCodeSheet.computeResults(code) ==== List("68", "")
 			}
+			"empty" in {
+				ScalaCodeSheet.computeResults("") ==== Nil
+			}
 		}
 
 		"function definition" in {

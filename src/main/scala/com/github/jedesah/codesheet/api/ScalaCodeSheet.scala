@@ -114,6 +114,7 @@ object ScalaCodeSheet {
                 }
             }
         }
+        case EmptyTree => outputResult
         case _ => {
           val result = evaluateWithSymbols(AST)
           val output = result match {
