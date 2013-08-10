@@ -7,8 +7,36 @@ import scala.tools.reflect.ToolBoxError
 import scala.reflect.runtime.universe.Flag._
 
 import com.github.jedesah.Math
+import com.github.jedesah.AugmentedCollections._
 
 object ScalaCodeSheet {
+
+    case class CompositeResult(children: List[Result]) {
+        override def toString = {
+            val outputList = children.foldLeft(List.empty[String]) { (list, result) =>
+                val alreadyThere = list.lift(result.line)
+                val prepend:String = alreadyThere.map( _ + "; ").getOrElse("")
+                list.safeUpdate(result.line, prepend + result.toString)
+            }
+            outputList.mkString("\n")
+        }
+    }
+    abstract class Result(val line: Int)
+    case class ExceptionResult(ex: Exception, override val line: Int) extends Result(line) {
+        override def toString = "throws " + ex
+    }
+    case class NotImplementedResult(override val line: Int) extends Result(line) {
+        override def toString = "???"
+    }
+    case class ValDefResult(name: String, inferredType: Option[String], inner: CompositeResult, override val line: Int) extends Result(line) {
+        override def toString = name + inferredType.map(": " + _).getOrElse("") + " = " + inner.toString
+    }
+    case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], inner: CompositeResult, override val line: Int) extends Result(line) {
+        override def toString = name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + inferredType.map(": " + _).getOrElse("") + " => " + inner.toString
+    }
+    case class ExpressionResult(steps: List[Tree], finalResult: String, override val line: Int) extends Result(line) {
+        override def toString = steps.mkString(" => ") + finalResult
+    }
 
     val notImplSymbol = Ident(newTermName("$qmark$qmark$qmark"))
 
