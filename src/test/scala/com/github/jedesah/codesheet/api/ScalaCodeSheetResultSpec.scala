@@ -4,22 +4,27 @@ import org.specs2.mutable._
 
 import ScalaCodeSheet._
 
+import scala.reflect.runtime.{currentMirror => cm}
+import scala.reflect.runtime.universe._
+import scala.tools.reflect.ToolBox
+
 class ScalaCodeSheetResult extends Specification {
 	implicit def oneElemToList[T](elem: T) = List(elem)
+	val tb = cm.mkToolBox()
 	"ScalaCodeSheetResult" should {
-		"CompositeResult" in {
+		"BlockResult" in {
 			"empty" in {
-				CompositeResult(Nil).toString === ""
+				BlockResult(Nil).toString === ""
 			}
 			"one" in {
-				val result = CompositeResult(List(
+				val result = BlockResult(List(
 					ExpressionResult(Nil, "3", 0)
 				))
 				result.toString === "3"
 			}
 			"two" in {
-				val result = CompositeResult(List(
-					ValDefResult("a", None, CompositeResult(ExpressionResult(Nil, "5", 0)), 0),
+				val result = BlockResult(List(
+					ValDefResult("a", None, BlockResult(ExpressionResult(Nil, "5", 0)), 0),
 					ExpressionResult(Nil, "true", 1)
 				))
 				val expected = """a = 5
@@ -27,9 +32,9 @@ class ScalaCodeSheetResult extends Specification {
 				result.toString ==== expected
 			}
 			"three" in {
-				val result = CompositeResult(List(
-					DefDefResult("perform", Nil, None, CompositeResult(ExpressionResult(Nil, "bar", 0)), 0),
-					ValDefResult("other", Some("Animal"), CompositeResult(ExpressionResult(Nil, "Dog(Maven)", 0)), 1),
+				val result = BlockResult(List(
+					DefDefResult("perform", Nil, None, BlockResult(ExpressionResult(Nil, "bar", 0)), 0),
+					ValDefResult("other", Some("Animal"), BlockResult(ExpressionResult(Nil, "Dog(Maven)", 0)), 1),
 					ExpressionResult(Nil, "1.5", 2)
 				))
 				val expected = """perform => bar
@@ -38,16 +43,16 @@ class ScalaCodeSheetResult extends Specification {
 				result.toString ==== expected
 			}
 			"on same line" in {
-				val result = CompositeResult(List(
-					ValDefResult("a", None, CompositeResult(ExpressionResult(Nil, "5", 0)), 0),
+				val result = BlockResult(List(
+					ValDefResult("a", None, BlockResult(ExpressionResult(Nil, "5", 0)), 0),
 					ExpressionResult(Nil, "true", 0)
 				))
 				val expected = "a = 5; true"
 				result.toString ==== expected
 			}
 			"with space" in {
-				val result = CompositeResult(List(
-					ValDefResult("a", None, CompositeResult(ExpressionResult(Nil, "5", 0)), 0),
+				val result = BlockResult(List(
+					ValDefResult("a", None, BlockResult(ExpressionResult(Nil, "5", 0)), 0),
 					ExpressionResult(Nil, "true", 2)
 				))
 				val expected = """a = 5
@@ -57,19 +62,66 @@ class ScalaCodeSheetResult extends Specification {
 			}
 		}
 		"ValDefResult" in {
-			pending
+			"simple block" in {
+				val result = ValDefResult("a", None, BlockResult(ExpressionResult(Nil, "5", 0)), 0)
+				result.toString === "a = 5"
+			}
+			"with inferred type" in {
+				val result = ValDefResult("a", Some("Animal"), BlockResult(ExpressionResult(Nil, "Cat(5)", 0)), 0)
+				result.toString === "a: Animal = Cat(5)"
+			}
+			"with complex block" in {
+				val result = ValDefResult("a", None, BlockResult(List(
+					ValDefResult("cc", None, BlockResult(ExpressionResult(Nil, "Cat(4)", 0)), 1),
+					ExpressionResult(Nil, "Cat(6)", 2)
+				)), 0)
+				val expected = """a = {
+								 |	cc = Cat(4)
+								 |	Cat(6)
+								 |}""".stripMargin
+				result.toString ==== expected
+			}
 		}
 		"DefDefResult" in {
-			pending
+			"simple block" in {
+				val result = DefDefResult("perform", Nil, None, BlockResult(ExpressionResult(Nil, "5", 0)), 0)
+				result.toString === "perfrom => 5"
+			}
+			"with params" in {
+				val params = List(
+					AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))),
+					AssignOrNamedArg(Ident(newTermName("tui")), Literal(Constant(true)))
+				)
+				val result = DefDefResult("perform", params, None, BlockResult(ExpressionResult(Nil, "5", 0)), 0)
+				result.toString === "perform(a = 5, tui = true) => 5"
+			}
+			"with inferred type" in {
+				val result = DefDefResult("perform", Nil, Some("Any"), BlockResult(ExpressionResult(Nil, "true", 0)), 0)
+				result.toString === "perform: Any => true"
+			}
+			"with complex block" in {
+				val result = DefDefResult("perform", Nil, None, BlockResult(List(
+					ValDefResult("cc", None, BlockResult(ExpressionResult(Nil, "Cat(4)", 0)), 1),
+					ExpressionResult(Nil, "Cat(6)", 2)
+				)), 0)
+				val expected = """perform => {
+								 |	cc = Cat(4)
+								 |	Cat(6)
+								 |}""".stripMargin
+				result.toString ==== expected
+			}
 		}
 		"ExpressionResult" in {
-			pending
+			val result = ExpressionResult(List(tb.parse("3 + 3")), ObjectResult(6), 0)
+			result.toString === "3 + 3 => 6"
 		}
-		"ExpressionResult" in {
-			pending
+		"ExceptionResult" in {
+			val result = ExceptionResult(new IndexOutOfBoundsException(), 0)
+			result.toString === "throws IndexOutOfBoundsException"
 		}
 		"NotImplementedResult" in {
-			pending
+			val result = NotImplementedResult
+			result.toString === "???"
 		}
 	}
 }
