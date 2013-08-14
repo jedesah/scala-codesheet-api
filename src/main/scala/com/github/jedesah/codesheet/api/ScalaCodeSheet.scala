@@ -33,7 +33,7 @@ object ScalaCodeSheet {
         override def toString = name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + inferredType.map(": " + _).getOrElse("") + " => " + inner.toWrappedString
     }
     case class ExpressionResult(steps: List[Tree], finalResult: SimpleResult, override val line: Int) extends Result(line) {
-        override def toString = steps.mkString(" => ") + finalResult
+        override def toString = (steps.map(prettyPrint) :+ finalResult).mkString(" => ")
     }
     abstract class SimpleResult(line: Int) extends Result(line)
     case class ExceptionResult(ex: Exception, override val line: Int) extends SimpleResult(line) {
