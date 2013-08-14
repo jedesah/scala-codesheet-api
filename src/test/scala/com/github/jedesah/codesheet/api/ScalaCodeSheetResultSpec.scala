@@ -85,7 +85,7 @@ class ScalaCodeSheetResult extends Specification {
 		"DefDefResult" in {
 			"simple block" in {
 				val result = DefDefResult("perform", Nil, None, BlockResult(ExpressionResult(Nil, "5", 0)), 0)
-				result.toString === "perfrom => 5"
+				result.toString === "perform => 5"
 			}
 			"with params" in {
 				val params = List(
