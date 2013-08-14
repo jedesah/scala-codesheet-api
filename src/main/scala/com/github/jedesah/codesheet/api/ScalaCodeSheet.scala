@@ -12,21 +12,25 @@ import com.github.jedesah.AugmentedCollections._
 object ScalaCodeSheet {
 
     case class BlockResult(children: List[Result]) {
-        override def toString = {
-            val outputList = children.foldLeft(List.empty[String]) { (list, result) =>
-                val alreadyThere = list.lift(result.line)
-                val prepend:String = alreadyThere.map( _ + "; ").getOrElse("")
-                list.safeUpdate(result.line, prepend + result.toString)
+        override def toString = outputList.mkString("\n")
+        def toWrappedString =
+            if (outputList.size > 1) {
+                val tabulate = (line: String) => if (line == "") "" else "\t" + line
+                "{" + outputList.map(tabulate).mkString("\n") + "\n}"
             }
-            outputList.mkString("\n")
+            else toString
+        def outputList = children.foldLeft(List.empty[String]) { (list, result) =>
+            val alreadyThere = list.lift(result.line)
+            val prepend:String = alreadyThere.map( _ + "; ").getOrElse("")
+            list.safeUpdate(result.line, prepend + result.toString)
         }
     }
     abstract class Result(val line: Int)
     case class ValDefResult(name: String, inferredType: Option[String], inner: BlockResult, override val line: Int) extends Result(line) {
-        override def toString = name + inferredType.map(": " + _).getOrElse("") + " = " + inner.toString
+        override def toString = name + inferredType.map(": " + _).getOrElse("") + " = " + inner.toWrappedString
     }
     case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], inner: BlockResult, override val line: Int) extends Result(line) {
-        override def toString = name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + inferredType.map(": " + _).getOrElse("") + " => " + inner.toString
+        override def toString = name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + inferredType.map(": " + _).getOrElse("") + " => " + inner.toWrappedString
     }
     case class ExpressionResult(steps: List[Tree], finalResult: SimpleResult, override val line: Int) extends Result(line) {
         override def toString = steps.mkString(" => ") + finalResult
