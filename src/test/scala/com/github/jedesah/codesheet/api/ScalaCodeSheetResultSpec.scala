@@ -123,6 +123,10 @@ class ScalaCodeSheetResult extends Specification {
 			val result = NotImplementedResult
 			result.toString === "???"
 		}
+		"ObjectResult" in {
+			val result = ObjectResult(6, 0)
+			result.toString === "6"
+		}
 	}
 }
 
