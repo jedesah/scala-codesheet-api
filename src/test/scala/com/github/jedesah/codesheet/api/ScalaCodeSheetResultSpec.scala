@@ -112,7 +112,7 @@ class ScalaCodeSheetResult extends Specification {
 			}
 		}
 		"ExpressionResult" in {
-			val result = ExpressionResult(List(tb.parse("3 + 3")), ObjectResult(6), 0)
+			val result = ExpressionResult(List(tb.parse("3 + 3")), 6, 0)
 			result.toString === "3 + 3 => 6"
 		}
 		"ExceptionResult" in {
