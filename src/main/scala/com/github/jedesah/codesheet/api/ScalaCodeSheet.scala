@@ -172,7 +172,12 @@ object ScalaCodeSheet {
         deconstructAnonymous(tree).map { case(name, body) =>
             val bodyString = if (body.isEmpty) "{}" else s"""{ ${body.mkString("; ")} }"""
             s"new $name $bodyString"
-        }.getOrElse(tree.toString)
+        }.getOrElse {
+            tree match {
+                case Apply(Select(x, newTermName), List(y)) => s"$x ${newTermName.decoded} $y"
+                case _ => tree.toString
+            }
+        }
     }
 
     def isSimpleExpression(tree: Tree): Boolean = tree match {
