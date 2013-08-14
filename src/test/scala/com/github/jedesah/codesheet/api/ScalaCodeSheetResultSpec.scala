@@ -117,10 +117,10 @@ class ScalaCodeSheetResult extends Specification {
 		}
 		"ExceptionResult" in {
 			val result = ExceptionResult(new IndexOutOfBoundsException(), 0)
-			result.toString === "throws IndexOutOfBoundsException"
+			result.toString === "throws java.lang.IndexOutOfBoundsException"
 		}
 		"NotImplementedResult" in {
-			val result = NotImplementedResult
+			val result = NotImplementedResult(0)
 			result.toString === "???"
 		}
 		"ObjectResult" in {
