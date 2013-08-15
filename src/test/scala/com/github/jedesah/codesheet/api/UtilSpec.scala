@@ -18,37 +18,4 @@ class UtilsSpec extends Specification {
 			ScalaCodeSheet.paramList(Nil) ==== ""
 		}
 	}
-
-	"isSimpleExpression" should {
-		"2 * 3 - 2" in {
-			val complexExpression =  "2 * 3 - 2"
-			val toolBox = cm.mkToolBox()
-			val tree = toolBox.parse(complexExpression)
-			ScalaCodeSheet.isSimpleExpression(tree) ==== false
-		}
-		"""Car("BMW", 5)""" in {
-			val simpleExpression =  """Car("BMW", 5)"""
-			val toolBox = cm.mkToolBox()
-			val tree = toolBox.parse(simpleExpression)
-			ScalaCodeSheet.isSimpleExpression(tree) ==== true
-		}
-		"\"hello\"" in {
-			val simpleExpression =  "\"hello\""
-			val toolBox = cm.mkToolBox()
-			val tree = toolBox.parse(simpleExpression)
-			ScalaCodeSheet.isSimpleExpression(tree) ==== true
-		}
-		"5" in {
-			val simpleExpression =  "5"
-			val toolBox = cm.mkToolBox()
-			val tree = toolBox.parse(simpleExpression)
-			ScalaCodeSheet.isSimpleExpression(tree) ==== true
-		}
-		"""new Car("BMW", 2013)""" in {
-			val simpleExpression = """new Car("BMW", 2013)"""
-			val toolBox = cm.mkToolBox()
-			val tree = toolBox.parse(simpleExpression)
-			ScalaCodeSheet.isSimpleExpression(tree) ==== true
-		}
-	}
 }

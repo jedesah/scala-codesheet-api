@@ -33,7 +33,7 @@ object ScalaCodeSheet {
         override def toString = name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + inferredType.map(": " + _).getOrElse("") + " => " + inner.toWrappedString
     }
     case class ExpressionResult(steps: List[Tree], finalResult: SimpleResult, override val line: Int) extends Result(line) {
-        override def toString = (steps.map(prettyPrint) :+ finalResult).mkString(" => ")
+        override def toString = (steps.map(_.prettyPrint) :+ finalResult).mkString(" => ")
     }
     abstract class SimpleResult(line: Int) extends Result(line)
     case class ExceptionResult(ex: Exception, override val line: Int) extends SimpleResult(line) {
@@ -98,7 +98,7 @@ object ScalaCodeSheet {
       AST match {
         // There is what appears to be a bug in Scala 2.10.1 where you cannot use a capital letter in a case statement with a @
         case ast @ ValDef(_, newTermName, _, assignee) => {
-          if (isSimpleExpression(assignee) || assignee.equalsStructure(notImplSymbol)) outputResult
+          if (assignee.isSimpleExpression || assignee.equalsStructure(notImplSymbol)) outputResult
           else {
               val evaluatedAssignement = evaluateWithSymbols(assignee)
               val output = s"$newTermName = $evaluatedAssignement"
@@ -132,7 +132,7 @@ object ScalaCodeSheet {
         }
         case defdef : DefDef => {
             val isNotImplemented = defdef.rhs.equalsStructure(notImplSymbol)
-            if (isSimpleExpression(defdef.rhs) || (defdef.vparamss.isEmpty && isNotImplemented))
+            if (defdef.rhs.isSimpleExpression || (defdef.vparamss.isEmpty && isNotImplemented))
                 outputResult
             else {
                 defdef.sampleParamsOption(classDefs) map { sampleValues =>
@@ -161,35 +161,6 @@ object ScalaCodeSheet {
           updateOutput(newOutput = output)
         }
       }
-    }
-
-    def prettyPrint(tree: Tree): String = {
-        // I believe this is not necessary anymore
-        /*case tree: Apply => tree.fun match {
-            case fun: Select => fun.qualifier.toString + "(" + tree.args.mkString(", ") + ")"
-            case fun: Ident => fun.toString + "(" + tree.args.mkString(", ") + ")"
-        }*/
-        deconstructAnonymous(tree).map { case(name, body) =>
-            val bodyString = if (body.isEmpty) "{}" else s"""{ ${body.mkString("; ")} }"""
-            s"new $name $bodyString"
-        }.getOrElse {
-            tree match {
-                case Apply(Select(x, newTermName), List(y)) => s"$x ${newTermName.decoded} $y"
-                case _ => tree.toString
-            }
-        }
-    }
-
-    def isSimpleExpression(tree: Tree): Boolean = tree match {
-        case _ : Literal => true
-        case tree: Apply => {
-            lazy val composedOfSimple = tree.args.forall(isSimpleExpression(_))
-            tree.fun match {
-                case fun: Select => fun.children.lift(0).map { case _ : New => composedOfSimple case _ => false }.getOrElse(false)
-                case fun: Ident => composedOfSimple
-            }
-        }
-        case _ => false
     }
 
     def computeResults(code: String): List[String] = try {
@@ -349,21 +320,8 @@ object ScalaCodeSheet {
         // list at the call site
         // Specifically this is necessary beacuse valDefs with default values as returned
         // unchaged in the sample generation process and they have type annotation that we do not want
-        val insideParenthesis = valDefs.map( valDef => valDef.name + " = " + prettyPrint(valDef.rhs) ).mkString(", ")
+        val insideParenthesis = valDefs.map( valDef => valDef.name + " = " + valDef.rhs.prettyPrint ).mkString(", ")
         if (insideParenthesis.isEmpty) "" else s"($insideParenthesis)"
-    }
-
-    def anonClass(name: String, impl: List[ValOrDefDef] = Nil) = Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName(name))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(()))))) ::: impl))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), Nil))
-    def deconstructAnonymous(tree: Tree): Option[(String, List[ValOrDefDef])] = tree match {
-        case block: Block => block.children(0) match {
-            case classDef: ClassDef => {
-                val parentName = classDef.impl.parents(0).toString
-                val body = classDef.impl.body.collect { case valOrDef: ValOrDefDef if !isConstructor(valOrDef) => valOrDef }
-                Some((parentName, body))
-            }
-            case _ => None
-        }
-        case _ => None
     }
 
     // I don't like the fact that 2 + 3 = 5 which is why I'd rather
