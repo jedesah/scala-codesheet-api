@@ -8,7 +8,7 @@ Right now the library accepts a String and outputs a String.
     import com.github.jedesah.codesheet.api.ScalaCodeSheet
     
     val myCode = "val a = ..."
-    val result:String = ScalaCodeSheet.computeResults(myCode)
+    val result: List[String] = ScalaCodeSheet.computeResults(myCode)
     
 But there are plans to output a more structured representation of the result.
 
