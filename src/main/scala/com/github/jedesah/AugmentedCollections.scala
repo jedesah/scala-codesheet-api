@@ -7,4 +7,8 @@ package object AugmentedCollections {
 			if (index < list.length) list.updated(index, value)
 			else (list :+ padding).safeUpdate(index, value, padding)
 	}
+
+	implicit class AugmentedStream[T](stream: Stream[T]) {
+		def repeat: Stream[T] = stream append stream.repeat
+	}
 }
