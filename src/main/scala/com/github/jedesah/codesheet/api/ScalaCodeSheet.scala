@@ -66,7 +66,6 @@ object ScalaCodeSheet {
           // it will be a block that adds a unit expressions at it's end and evaluates to unit. Useless behavior as far as we are concerned.
           // TODO: Remove use of deprecated Block constructor.
           val totalSymbols = symbols ++ extraSymbols
-          println(Block(totalSymbols.toList :+ expr: _*))
           if (totalSymbols.isEmpty) toolBox.eval(expr)
           else toolBox.eval(Block(totalSymbols.toList :+ expr: _*))
       }
