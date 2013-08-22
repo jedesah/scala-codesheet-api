@@ -319,6 +319,11 @@ class ScalaCodeSheetSpec extends Specification {
 							| a + 10""".stripMargin
 				ScalaCodeSheet.computeResults(code) ==== List("", "44")
 			}
+			"value is function application" in {
+				val code = """def perform(a: Int) = a + 5
+							| val gg = perform(4)""".stripMargin
+				ScalaCodeSheet.computeResults(code) ==== List("perform(a = 3) => 8", "gg = 9")
+			}
 		}
 
 		"class definition" in {
