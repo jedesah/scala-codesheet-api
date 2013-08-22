@@ -28,13 +28,13 @@ package object api {
 	        }
 	    }
 
-	    def isSimpleExpression: Boolean = tree match {
+	    def isSimpleExpression(classDefs: Traversable[ClassDef] = Nil): Boolean = tree match {
 	        case _ : Literal => true
 	        case tree: Apply => {
-	            lazy val composedOfSimple = tree.args.forall(_.isSimpleExpression)
+	            lazy val composedOfSimple = tree.args.forall(_.isSimpleExpression(classDefs))
 	            tree.fun match {
 	                case fun: Select => fun.children.lift(0).map { case _ : New => composedOfSimple case _ => false }.getOrElse(false)
-	                case fun: Ident => composedOfSimple
+	                case fun: Ident => composedOfSimple && classDefs.exists(_.name.toString == fun.name.toString)
 	            }
 	        }
 	        case _ => false

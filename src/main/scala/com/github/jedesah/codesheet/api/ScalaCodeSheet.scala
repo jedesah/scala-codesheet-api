@@ -97,7 +97,7 @@ object ScalaCodeSheet {
       AST match {
         // There is what appears to be a bug in Scala 2.10.1 where you cannot use a capital letter in a case statement with a @
         case ast @ ValDef(_, newTermName, _, assignee) => {
-          if (assignee.isSimpleExpression || assignee.equalsStructure(notImplSymbol)) outputResult
+          if (assignee.isSimpleExpression(classDefs) || assignee.equalsStructure(notImplSymbol)) outputResult
           else {
               val evaluatedAssignement = evaluateWithSymbols(assignee)
               val output = s"$newTermName = $evaluatedAssignement"
@@ -131,7 +131,7 @@ object ScalaCodeSheet {
         }
         case defdef : DefDef => {
             val isNotImplemented = defdef.rhs.equalsStructure(notImplSymbol)
-            if (defdef.rhs.isSimpleExpression || (defdef.vparamss.isEmpty && isNotImplemented))
+            if (defdef.rhs.isSimpleExpression(classDefs) || (defdef.vparamss.isEmpty && isNotImplemented))
                 outputResult
             else {
                 defdef.sampleParamsOption(classDefs) map { sampleValues =>
