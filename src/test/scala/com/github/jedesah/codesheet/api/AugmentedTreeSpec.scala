@@ -35,6 +35,12 @@ class AugmentedTreeSpec extends Specification {
 				val tree = toolBox.parse(simpleExpression)
 				tree.isSimpleExpression() ==== true
 			}
+			"???" in {
+				val simpleExpression =  "???"
+				val toolBox = cm.mkToolBox()
+				val tree = toolBox.parse(simpleExpression)
+				tree.isSimpleExpression() ==== true
+			}
 			"""new Car("BMW", 2013)""" in {
 				val simpleExpression = """new Car("BMW", 2013)"""
 				val toolBox = cm.mkToolBox()

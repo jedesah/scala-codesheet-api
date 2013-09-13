@@ -14,118 +14,141 @@ class ScalaCodeSheetResult extends Specification {
 	"ScalaCodeSheetResult" should {
 		"BlockResult" in {
 			"empty" in {
-				BlockResult(Nil).toString === ""
+				BlockResult(Nil).userRepr === ""
 			}
 			"one" in {
 				val result = BlockResult(List(
-					ExpressionResult(Nil, "3", 0)
+					ExpressionResult("3", line = 1)
 				))
-				result.toString === "3"
+				result.userRepr ==== "3"
 			}
 			"two" in {
 				val result = BlockResult(List(
-					ValDefResult("a", None, BlockResult(ExpressionResult(Nil, "5", 0)), 0),
-					ExpressionResult(Nil, "true", 1)
+					ValDefResult("a", None, BlockResult(ExpressionResult("5", line = 1)), line = 1),
+					ExpressionResult("true", line = 2)
 				))
 				val expected = """a = 5
 								 |true""".stripMargin
-				result.toString ==== expected
+				result.userRepr ==== expected
 			}
 			"three" in {
 				val result = BlockResult(List(
-					DefDefResult("perform", Nil, None, BlockResult(ExpressionResult(Nil, "bar", 0)), 0),
-					ValDefResult("other", Some("Animal"), BlockResult(ExpressionResult(Nil, "Dog(Maven)", 0)), 1),
-					ExpressionResult(Nil, "1.5", 2)
+					DefDefResult("perform", Nil, None, BlockResult(ExpressionResult("bar", line = 1)), line = 1),
+					ValDefResult("other", Some("Animal"), BlockResult(ExpressionResult("Dog(Maven)", line = 2)), line = 2),
+					ExpressionResult("1.5", line = 3)
 				))
 				val expected = """perform => bar
 								 |other: Animal = Dog(Maven)
 								 |1.5""".stripMargin
-				result.toString ==== expected
+				result.userRepr ==== expected
 			}
 			"on same line" in {
 				val result = BlockResult(List(
-					ValDefResult("a", None, BlockResult(ExpressionResult(Nil, "5", 0)), 0),
-					ExpressionResult(Nil, "true", 0)
+					ValDefResult("a", None, BlockResult(ExpressionResult(5, line = 1)), line = 1),
+					ExpressionResult(true, line = 1)
 				))
 				val expected = "a = 5; true"
-				result.toString ==== expected
+				result.userRepr ==== expected
 			}
 			"with space" in {
 				val result = BlockResult(List(
-					ValDefResult("a", None, BlockResult(ExpressionResult(Nil, "5", 0)), 0),
-					ExpressionResult(Nil, "true", 2)
+					ValDefResult("a", None, BlockResult(ExpressionResult(5, line = 1)), line = 1),
+					ExpressionResult(true, line = 3)
 				))
 				val expected = """a = 5
 								 |
 								 |true""".stripMargin
-				result.toString ==== expected
+				result.userRepr ==== expected
 			}
 		}
 		"ValDefResult" in {
 			"simple block" in {
-				val result = ValDefResult("a", None, BlockResult(ExpressionResult(Nil, "5", 0)), 0)
-				result.toString === "a = 5"
+				val result = ValDefResult("a", None, BlockResult(ExpressionResult("5", line = 1)), line = 1)
+				result.userRepr === "a = 5"
 			}
 			"with inferred type" in {
-				val result = ValDefResult("a", Some("Animal"), BlockResult(ExpressionResult(Nil, "Cat(5)", 0)), 0)
-				result.toString === "a: Animal = Cat(5)"
+				val result = ValDefResult("a", Some("Animal"), BlockResult(ExpressionResult("Cat(5)", line = 1)), line = 1)
+				result.userRepr === "a: Animal = Cat(5)"
 			}
 			"with complex block" in {
 				val result = ValDefResult("a", None, BlockResult(List(
-					ValDefResult("cc", None, BlockResult(ExpressionResult(Nil, "Cat(4)", 0)), 1),
-					ExpressionResult(Nil, "Cat(6)", 2)
-				)), 0)
+					ValDefResult("cc", None, BlockResult(ExpressionResult("Cat(4)", line = 2)), line = 2),
+					ExpressionResult("Cat(6)", line = 3)
+				)), line = 1)
 				val expected = """a = {
 								 |	cc = Cat(4)
 								 |	Cat(6)
 								 |}""".stripMargin
-				result.toString ==== expected
+				result.userRepr ==== expected
 			}
 		}
 		"DefDefResult" in {
 			"simple block" in {
-				val result = DefDefResult("perform", Nil, None, BlockResult(ExpressionResult(Nil, "5", 0)), 0)
-				result.toString === "perform => 5"
+				val result = DefDefResult("perform", Nil, None, BlockResult(ExpressionResult("5", line = 1)), line = 1)
+				result.userRepr === "perform => 5"
 			}
 			"with params" in {
 				val params = List(
 					AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))),
 					AssignOrNamedArg(Ident(newTermName("tui")), Literal(Constant(true)))
 				)
-				val result = DefDefResult("perform", params, None, BlockResult(ExpressionResult(Nil, "5", 0)), 0)
-				result.toString === "perform(a = 5, tui = true) => 5"
+				val result = DefDefResult("perform", params, None, BlockResult(ExpressionResult("5", line = 1)), line = 1)
+				result.userRepr === "perform(a = 5, tui = true) => 5"
 			}
 			"with inferred type" in {
-				val result = DefDefResult("perform", Nil, Some("Any"), BlockResult(ExpressionResult(Nil, "true", 0)), 0)
-				result.toString === "perform: Any => true"
+				val result = DefDefResult("perform", Nil, Some("Any"), BlockResult(ExpressionResult(true, line = 1)), line = 1)
+				result.userRepr === "perform: Any => true"
 			}
 			"with complex block" in {
 				val result = DefDefResult("perform", Nil, None, BlockResult(List(
-					ValDefResult("cc", None, BlockResult(ExpressionResult(Nil, "Cat(4)", 0)), 1),
-					ExpressionResult(Nil, "Cat(6)", 2)
-				)), 0)
+					ValDefResult("cc", None, BlockResult(ExpressionResult("Cat(4)", line = 2)), line = 2),
+					ExpressionResult("Cat(6)", line = 3)
+				)), line = 1)
 				val expected = """perform => {
 								 |	cc = Cat(4)
 								 |	Cat(6)
 								 |}""".stripMargin
-				result.toString ==== expected
+				result.userRepr ==== expected
 			}
 		}
 		"ExpressionResult" in {
-			val result = ExpressionResult(List(tb.parse("3 + 3")), 6, 0)
-			result.toString === "3 + 3 => 6"
+			"with steps" in {
+				val result = ExpressionResult(steps = List(tb.parse("3 + 3")), final_ = 6, line = 1)
+				result.userRepr === "3 + 3 => 6"
+			}
+			"without steps" in {
+				val result = ExpressionResult(true, line = 1)
+				result.userRepr === "true"
+			}
+			"Unit" in {
+				val result = ExpressionResult(Unit, line = 1)
+				result.userRepr === ""
+			}
+			"trivial result" in {
+				val result = ExpressionResult(final_ = true, trivial = true, line = 1)
+				result.userRepr === "true"
+			}
 		}
 		"ExceptionResult" in {
-			val result = ExceptionResult(new IndexOutOfBoundsException(), 0)
-			result.toString === "throws java.lang.IndexOutOfBoundsException"
+			val result = ExceptionResult(new IndexOutOfBoundsException())
+			result.userRepr === "throws java.lang.IndexOutOfBoundsException"
 		}
 		"NotImplementedResult" in {
-			val result = NotImplementedResult(0)
-			result.toString === "???"
+			val result = NotImplementedResult
+			result.userRepr === "???"
 		}
 		"ObjectResult" in {
-			val result = ObjectResult(6, 0)
-			result.toString === "6"
+			val result = ObjectResult(6)
+			result.userRepr === "6"
+		}
+		"CompileErrorResult" in {
+			val result = CompileErrorResult("Your code sucks dude", 0)
+			result.userRepr === "Your code sucks dude"
+		}
+		"ClassDefResult" in {
+			val members = List(AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))))
+			val result = ClassDefResult("Dog", members, BlockResult(Nil), line = 1)
+			result.userRepr === "Dog(a = 5)"
 		}
 	}
 }

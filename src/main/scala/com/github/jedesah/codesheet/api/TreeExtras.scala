@@ -11,6 +11,9 @@ package object api {
 	}
 
 	implicit class AugmentedTree(tree: Tree) {
+
+		val notImplSymbol = Ident(newTermName("$qmark$qmark$qmark"))
+
     	def prettyPrint: String = {
 	        // I believe this is not necessary anymore
 	        /*case tree: Apply => tree.fun match {
@@ -37,7 +40,7 @@ package object api {
 	                case fun: Ident => composedOfSimple && classDefs.exists(_.name.toString == fun.name.toString)
 	            }
 	        }
-	        case _ => false
+	        case other => other.equalsStructure(notImplSymbol)
 	    }
 	}
 
