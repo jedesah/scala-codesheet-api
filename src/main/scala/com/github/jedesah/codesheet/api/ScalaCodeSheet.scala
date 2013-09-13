@@ -41,7 +41,7 @@ object ScalaCodeSheet {
     case class ModuleDefResult(name: String, inner: BlockResult, override val line: Int) extends Result(line) {
         def userRepr = name + inner.wrappedUserRepr(line)
     }
-    case class ExpressionResult(final_ : ValueResult, steps: List[Tree] = Nil, override val line: Int, trivial: Boolean = false) extends Result(line) {
+    case class ExpressionResult(final_ : ValueResult, steps: List[Tree] = Nil, override val line: Int) extends Result(line) {
         def userRepr = (steps.map(_.prettyPrint) :+ final_.userRepr).mkString(" => ")
     }
     case class CompileErrorResult(message: String, override val line: Int) extends Result(line) {
@@ -135,7 +135,7 @@ object ScalaCodeSheet {
         case EmptyTree => Nil
         case expr => {
             val result = if (expr.equalsStructure(notImplSymbol)) NotImplementedResult else evaluateWithSymbols(AST)
-            List(ExpressionResult(final_ = result , line = AST.pos.line, trivial = expr.isSimpleExpression(classDefs)))
+            List(ExpressionResult(final_ = result , line = AST.pos.line))
         }
       }
     }

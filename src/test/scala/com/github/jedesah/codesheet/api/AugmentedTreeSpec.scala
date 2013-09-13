@@ -8,46 +8,6 @@ import scala.tools.reflect.ToolBox
 
 class AugmentedTreeSpec extends Specification {
 	"AugmentedTree" should {
-		"isSimpleExpression" should {
-			"2 * 3 - 2" in {
-				val complexExpression =  "2 * 3 - 2"
-				val toolBox = cm.mkToolBox()
-				val tree = toolBox.parse(complexExpression)
-				tree.isSimpleExpression() ==== false
-			}
-			"""Car("BMW", 5)""" in {
-				val toolBox = cm.mkToolBox()
-				val classDef = toolBox.parse("case class Car(name: String, year: Int)").asInstanceOf[ClassDef]
-				val simpleExpression =  """Car("BMW", 5)"""
-
-				val tree = toolBox.parse(simpleExpression)
-				tree.isSimpleExpression(List(classDef)) ==== true
-			}
-			"\"hello\"" in {
-				val simpleExpression =  "\"hello\""
-				val toolBox = cm.mkToolBox()
-				val tree = toolBox.parse(simpleExpression)
-				tree.isSimpleExpression() ==== true
-			}
-			"5" in {
-				val simpleExpression =  "5"
-				val toolBox = cm.mkToolBox()
-				val tree = toolBox.parse(simpleExpression)
-				tree.isSimpleExpression() ==== true
-			}
-			"???" in {
-				val simpleExpression =  "???"
-				val toolBox = cm.mkToolBox()
-				val tree = toolBox.parse(simpleExpression)
-				tree.isSimpleExpression() ==== true
-			}
-			"""new Car("BMW", 2013)""" in {
-				val simpleExpression = """new Car("BMW", 2013)"""
-				val toolBox = cm.mkToolBox()
-				val tree = toolBox.parse(simpleExpression)
-				tree.isSimpleExpression() ==== true
-			}
-		}
 		"prettyPrint" in {
 			"addition" in {
 				val tb = cm.mkToolBox()
