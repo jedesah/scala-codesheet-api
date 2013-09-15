@@ -124,10 +124,6 @@ class ScalaCodeSheetResult extends Specification {
 				val result = ExpressionResult(Unit, line = 1)
 				result.userRepr === ""
 			}
-			"trivial result" in {
-				val result = ExpressionResult(final_ = true, trivial = true, line = 1)
-				result.userRepr === "true"
-			}
 		}
 		"ExceptionResult" in {
 			val result = ExceptionResult(new IndexOutOfBoundsException())
