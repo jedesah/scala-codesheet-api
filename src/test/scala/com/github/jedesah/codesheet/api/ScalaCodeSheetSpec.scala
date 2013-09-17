@@ -224,19 +224,28 @@ class ScalaCodeSheetSpec extends Specification {
 						val inner = BlockResult(List(ExpressionResult(List(3,5,7), line = 1)))		
 						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
 					}
-				}/*
+				}
 				"custom class" in {
 					"case" in {
 						"one case class definition" in {
 							"one param occurence" in {
 								val code = """case class Car(year: Int, model: String)
 										| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
-								ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo")) => foo-3""")
+								val params = List ( 
+									AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo")))))
+								)
+								val inner BlockResult(List(ExpressionResult("foo-3", line = 1)
+								computeResults(code) ==== BlockResult(List(DefDefResult("foo",param,None,inner, line =1)))
 							}
 							"two param occurence" in {
 								val code = """case class Car(year: Int, model: String)
 										| def foo(a: Car, b: Car) = a.year - b.year""".stripMargin
-								ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo"), b = Car(5, "bar")) => -2""")
+																val params = List ( 
+									AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo"))))),
+									AssignOrNamedArg(Ident(newTermName("b")), Apply(Ident(newTermName("Car")), List(Literal(Constant(5)),Literal(Constant("bar")))))
+								)
+								val inner BlockResult(List(ExpressionResult(-2, line = 1)
+								computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
 							}
 						}
 						"two case class definitions" in {
@@ -244,23 +253,21 @@ class ScalaCodeSheetSpec extends Specification {
 								val code = """case class Car(year: Int, model: String)
 									  | case class Person(name: String, age: Int)
 									  | def isMatch(car: Car) = car.year""".stripMargin
-								val result = List(
-									"",
-									"",
-									"""isMatch(car = Car(3, "foo")) => 3"""
+								val params = List ( 
+									AssignOrNamedArg(Ident(newTermName("car")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo")))))
 								)
-								ScalaCodeSheet.computeResults(code) ==== result
+								val inner BlockResult(List(ExpressionResult(3, line = 1)
+								computeResults(code) ==== BlockResult(List(DefDefResult("isMatch", params, None, inner, line = 1)))	
 							}
 							"use of second one" in {
 								val code = """case class Car(year: Int, model: String)
 									  | case class Person(name: String, age: Int)
 									  | def isMatch(person: Person) = person.name""".stripMargin
-								val result = List(
-									"",
-									"",
-									"""isMatch(person = Person("foo", 3)) => foo"""
+								val params = List ( 
+									AssignOrNamedArg(Ident(newTermName("person")), Apply(Ident(newTermName("Person")), List(Literal(Constant("foo")),Literal(Constant(3)))))
 								)
-								ScalaCodeSheet.computeResults(code) ==== result
+								val inner BlockResult(List(ExpressionResult("foo", line = 1)
+								computeResults(code) ==== BlockResult(List(DefDefResult("isMatch", params, None, inner, line = 1)))	
 							}
 						}
 						"multiple case class definitions" in {
@@ -270,39 +277,33 @@ class ScalaCodeSheetSpec extends Specification {
 										  | case class Person(name: String, age: Int)
 										  | case class Document(text: String, author: String)
 										  | def isMatch(doc: Document) = doc.author""".stripMargin
-									val result = List(
-										"",
-										"",
-										"",
-										"""isMatch(doc = Document("foo", "bar")) => bar"""
+									val params = List ( 
+										AssignOrNamedArg(Ident(newTermName("doc")), Apply(Ident(newTermName("Document")), List(Literal(Constant("foo")),Literal(Constant("bar")))))
 									)
-									ScalaCodeSheet.computeResults(code) ==== result
+									val inner BlockResult(List(ExpressionResult("bar", line = 1)
+									computeResults(code) ==== BlockResult(List(DefDefResult("isMatch", params, None, inner, line = 1)))	
 								}
 								"case 2" in {
 									val code = """case class Car(year: Int, model: String)
 										  | case class Person(name: String, age: Int)
 										  | case class Document(text: String, author: String)
 										  | def isMatch(person: Person) = person.name""".stripMargin
-									val result = List(
-										"",
-										"",
-										"",
-										"""isMatch(person = Person("foo", 3)) => foo"""
+									val params = List ( 
+										AssignOrNamedArg(Ident(newTermName("person")), Apply(Ident(newTermName("Person")), List(Literal(Constant("foo")),Literal(Constant(3)))))
 									)
-									ScalaCodeSheet.computeResults(code) ==== result
+									val inner BlockResult(List(ExpressionResult("foo", line = 1)
+									computeResults(code) ==== BlockResult(List(DefDefResult("isMatch", params, None, inner, line = 1)))	
 								}
 								"case 3" in {
 									val code = """case class Car(year: Int, model: String)
 										  | case class Person(name: String, age: Int)
 										  | case class Document(text: String, author: String)
 										  | def isMatch(car: Car) = car.year""".stripMargin
-									val result = List(
-										"",
-										"",
-										"",
-										"""isMatch(car = Car(3, "foo")) => 3"""
+									val params = List ( 
+										AssignOrNamedArg(Ident(newTermName("car")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo")))))
 									)
-									ScalaCodeSheet.computeResults(code) ==== result
+									val inner BlockResult(List(ExpressionResult(3, line = 1)
+									computeResults(code) ==== BlockResult(List(DefDefResult("isMatch", params, None, inner, line = 1)))	
 								}
 							}
 							"multiple occurences" in {
@@ -310,13 +311,12 @@ class ScalaCodeSheetSpec extends Specification {
 									  | case class Person(name: String, age: Int)
 									  | case class Document(text: String, author: String)
 									  | def isMatch(doc: Document, peps: Person) = doc.author == peps.name""".stripMargin
-								val result = List(
-									"",
-									"",
-									"",
-									"""isMatch(doc = Document("foo", "bar"), peps = Person("biz", 3)) => false"""
+								val params = List ( 
+									AssignOrNamedArg(Ident(newTermName("car")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo"))))),
+									AssignOrNamedArg(Ident(newTermName("peps")), Apply(Ident(newTermName("Person")), List(Literal(Constant("biz")),Literal(Constant(3)))))
 								)
-								ScalaCodeSheet.computeResults(code) ==== result
+								val inner BlockResult(List(ExpressionResult(false, line = 1)
+								computeResults(code) ==== BlockResult(List(DefDefResult("isMatch", params, None, inner, line = 1)))	
 							}
 						}
 						"multiple function definitions" in {
@@ -325,44 +325,68 @@ class ScalaCodeSheetSpec extends Specification {
 									  | case class Document(text: String, author: String)
 									  | def isMatch(doc: Document, peps: Person) = doc.author == peps.name
 									  | def barCode(car: Car) = car.model + "-" + car.year""".stripMargin
-							val result = List(
-								"",
-								"",
-								"",
-								"""isMatch(doc = Document("foo", "bar"), peps = Person("biz", 3)) => false""",
-								"""barCode(car = Car(3, "foo")) => foo-3"""
+							val paramsIsMatch = List ( 
+								AssignOrNamedArg(Ident(newTermName("doc")), Apply(Ident(newTermName("Document")), List(Literal(Constant("foo"),Literal(Constant("bar")))))
+								AssignOrNamedArg(Ident(newTermName("peps")), Apply(Ident(newTermName("Person")), List(Literal(Constant("biz"),Literal(Constant(3)))))									
 							)
-							ScalaCodeSheet.computeResults(code) ==== result
+							val paramsBarCode = List ( 
+								AssignOrNamedArg(Ident(newTermName("car")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3),Literal(Constant("foo")))))
+							)								
+							val innerIsMatch BlockResult(List(ExpressionResult(false, line = 1)
+							val innerBarCode BlockResult(List(ExpressionResult("foo-3", line = 1)
+							computeResults(code) ==== BlockResult(List(
+								DefDefResult("isMatch", paramsIsMatch, None, innerIsMatch, line = 1),
+								DefDefResult("barCode", paramsBarCode,None,innerBarCode, line = 2)
+							))	
 						}
 					}
 					"normal" in {
 						"one" in {
 							val code = """class Car(val year: Int, val model: String)
 										| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
-							ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = new Car(3, "foo")) => foo-3""")
+							val params = List ( 
+								AssignOrNamedArg(Ident(newTermName("car")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo")))))
+							)
+							val inner BlockResult(List(ExpressionResult("foo-3", line = 1)
+							computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
 						}
 						"three" in {
 							val code = """class Car(val year: Int, val model: String)
 										| class Hut(oui: Boolean, tot: String)
 										| class Fat(var calorie: Int, var heat: Int)
 										| def foo(a: Car, b: Hut, c: Fat) = a.model + "-" + a.year""".stripMargin
-							var result = List(
-								"",
-								"",
-								"",
-								"""foo(a = new Car(3, "foo"), b = new Hut(true, "bar"), c = new Fat(5, 7)) => foo-3"""
+							val params = List ( 
+								AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo"))))),
+								AssignOrNamedArg(Ident(newTermName("b")), Apply(Ident(newTermName("Hut")), List(Literal(Constant(true)),Literal(Constant("bar"))))),
+								AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Fat")), List(Literal(Constant(5)),Literal(Constant(7)))))								
 							)
+							val inner BlockResult(List(ExpressionResult("foo-3", line = 1)
+							computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+
+
 							ScalaCodeSheet.computeResults(code) ==== result
 						}
 					}
 				}
 				"mixed" in {
 					val code = """def foo(a: Int, b: String, c: Boolean) = if (c) a else b.length"""
-					ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""")
+					val params = List ( 
+						AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))),
+						AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))),
+						AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true)))
+					)
+					val inner BlockResult(List(ExpressionResult(3, line = 1)
+					computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))
 				}
 				"with default Values" in {
 					val code = "def foo(a: Int, b: Int = 10, c: Int = 1) = a + b - c"
-					ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 10, c = 1) => 12")
+					val params = List ( 
+						AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))),
+						AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(10))),
+						AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(1)))
+					)
+					val inner BlockResult(List(ExpressionResult(12, line = 1)
+					computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))
 				}
 				"multiline" in {
 					"one expression" in {
