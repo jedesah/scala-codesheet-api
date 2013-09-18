@@ -66,8 +66,8 @@ object ScalaCodeSheet {
 
     val notImplSymbol = Ident(newTermName("$qmark$qmark$qmark"))
 
-    def evaluate(AST: Tree, toolBox: ToolBox[reflect.runtime.universe.type], symbols: List[Tree] = Nil): List[Result] = {
-      lazy val classDefs: Traversable[ClassDef] = symbols.collect{ case elem: ClassDef => elem}
+    def evaluate(AST: Tree, toolBox: ToolBox[reflect.runtime.universe.type], symbols: List[DefTree] = Nil): List[Result] = {
+      lazy val classDefs: Traversable[ClassDef] = symbols.collect{ case elem: ClassDef => elem }
 
       def evaluateWithSymbols(expr: Tree, extraSymbols: Traversable[Tree] = Set()) = {
           // In Scala 2.10.1, when you create a Block using the following deprecated method, if you pass in only one argument
@@ -87,10 +87,16 @@ object ScalaCodeSheet {
                 // evaluating.
                 // We only grab the rhs of the current member when evaluating so, it's not like
                 // the compiler is going to complain about a duplicate definition.
-                val allSymbols: List[Tree] = ((symbols ::: classParams) :+ AST) ::: body
-                evaluate(child, toolBox, allSymbols)
+                val newSymbols = updateSymbols(symbols, (classParams :+ AST) ::: body)
+                evaluate(child, toolBox, newSymbols)
             }
             BlockResult(result.flatten)
+      }
+
+      def updateSymbols(oldSymbols: List[DefTree], newSymbols: List[Tree]): List[DefTree] = {
+        val newDefSymbols = newSymbols.collect{ case s: DefTree => s }
+        val oldInNewScope = oldSymbols.filter( symbol => !newDefSymbols.exists(symbol.name.toString == _.name.toString))
+        oldInNewScope ++ newDefSymbols
       }
 
       AST match {
@@ -101,7 +107,8 @@ object ScalaCodeSheet {
         // We fold over each child and all of it's preceding childs (inits) and evaluate
         // it with it's preceding children
         case expr: Block => expr.children.inits.toList.reverse.drop(1).map { childs =>
-            evaluate(childs.last, toolBox, symbols ++ childs.init)
+            val newSymbols = updateSymbols(symbols, childs.init)
+            evaluate(childs.last, toolBox, newSymbols)
         }.flatten
         case classDef: ClassDef =>
             // TODO: Handle abstract classes in a more awesome way than ignoring them
@@ -126,7 +133,8 @@ object ScalaCodeSheet {
         }
         case defdef : DefDef => {
             defdef.sampleParamsOption(classDefs) map { sampleValues =>
-                val inner = evaluate(defdef.rhs, toolBox, symbols ::: sampleValues)
+                val newSymbols = updateSymbols(symbols, sampleValues)
+                val inner = evaluate(defdef.rhs, toolBox, newSymbols)
                 List(DefDefResult(defdef.name.toString, paramList(sampleValues), None, line = AST.pos.line, inner = BlockResult(inner)))
             } getOrElse {
                 Nil
