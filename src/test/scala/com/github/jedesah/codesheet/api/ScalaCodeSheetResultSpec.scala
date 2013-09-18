@@ -142,9 +142,26 @@ class ScalaCodeSheetResult extends Specification {
 			result.userRepr === "Your code sucks dude"
 		}
 		"ClassDefResult" in {
-			val members = List(AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))))
-			val result = ClassDefResult("Dog", members, BlockResult(Nil), line = 1)
-			result.userRepr === "Dog(a = 5)"
+			"no body" in {
+				val members = List(AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))))
+				val result = ClassDefResult("Dog", members, BlockResult(Nil), line = 1)
+				result.userRepr === "Dog(a = 5)"
+			}
+			"with body" in {
+				val members = List(
+					AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))),
+					AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3)))
+				)
+				val params = List(
+					AssignOrNamedArg(Ident(newTermName("mult")), Literal(Constant(3)))
+				)
+				val innerFun = DefDefResult("humanAge", params, None, BlockResult(List(ExpressionResult(9, line = 2))), line = 2)
+
+				val classDef = ClassDefResult("Cat", members, BlockResult(List(innerFun)), line = 1)
+				classDef.userRepr === """Cat(name = "foo", age = 3) {
+										|	humanAge(mult = 3) => 9
+										|}""".stripMargin
+			}
 		}
 	}
 }

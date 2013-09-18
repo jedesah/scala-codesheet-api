@@ -13,8 +13,8 @@ object ScalaCodeSheet {
 
     case class BlockResult(children: List[Result]) {
         def userRepr = childrenRepr(1)
-        def wrappedUserRepr(at: Int): String =
-            if (children.size > 1) {
+        def wrappedUserRepr(at: Int, forceWrap: Boolean = false): String =
+            if (children.size > 1 || (forceWrap && children.size == 1)) {
                 val tabulate = (line: String) => if (line == "") "" else "\t" + line
                 "{" + childrenRepr(at).lines.map(tabulate).mkString("\n") + "\n}"
             }
@@ -36,10 +36,18 @@ object ScalaCodeSheet {
         def userRepr = name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + inferredType.map(": " + _).getOrElse("") + " => " + inner.wrappedUserRepr(line)
     }
     case class ClassDefResult(name: String, params: List[AssignOrNamedArg], inner: BlockResult, override val line: Int) extends Result(line) {
-        def userRepr = name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + inner.wrappedUserRepr(line)
+        def userRepr = {
+            val body = inner.wrappedUserRepr(line, forceWrap = true)
+            val adaptedBody = if (body == "") "" else " " + body
+            name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + adaptedBody
+        }
     }
     case class ModuleDefResult(name: String, inner: BlockResult, override val line: Int) extends Result(line) {
-        def userRepr = name + inner.wrappedUserRepr(line)
+        def userRepr = {
+            val body = inner.wrappedUserRepr(line, forceWrap = true)
+            val adaptedBody = if (body == "") "" else " " + body
+            name + adaptedBody
+        }
     }
     case class ExpressionResult(final_ : ValueResult, steps: List[Tree] = Nil, override val line: Int) extends Result(line) {
         def userRepr = (steps.map(_.prettyPrint) :+ final_.userRepr).mkString(" => ")
