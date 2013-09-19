@@ -65,10 +65,10 @@ class ScalaCodeSheetSpec extends Specification {
 			"overlapping scope" in {
 				val code = """val a = 4
 							 |def tot(a: String) = a * 2""".stripMargin
-				val first = ValDefResult("a", None, inner = BlockResult(List(ExpressionResult(4, line = 1))), line = 1)
+				val first = ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(4, line = 1))), line = 1)
 				val params = List(AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
-				val inner = BlockResult(List(ExpressionResult("foofoo", line = 2)))
-				val second = DefDefResult("tot", inferredType = None, params = params, inner = inner, line = 2)
+				val rhs = BlockResult(List(ExpressionResult("foofoo", line = 2)))
+				val second = DefDefResult("tot", inferredType = None, params = params, rhs = rhs, line = 2)
 				computeResults(code) ==== BlockResult(List(first, second))
 			}
 			"with params" in {
@@ -80,8 +80,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7)))
 						)
-						val inner = BlockResult(List(ExpressionResult(1, line = 1))) 
-						computeResults(code) ====  BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))
+						val rhs = BlockResult(List(ExpressionResult(1, line = 1)))
+						computeResults(code) ====  BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"String" in {
 						val code = """def addExclamation(a: String, b: String, c: String) = s"$a! $b! $c!" """
@@ -90,8 +90,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("bar"))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant("biz")))
 						)
-						val inner = BlockResult(List(ExpressionResult("foo! bar! biz!", line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("addExclamation", params, None, inner, line = 1)))
+						val rhs = BlockResult(List(ExpressionResult("foo! bar! biz!", line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("addExclamation", params, None, rhs, line = 1)))
 					}
 					"Float" in {
 						val code = "def foo(a: Float, b: Float, c: Float) = a + b - c"
@@ -100,8 +100,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(2.5))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(4.5)))
 						)
-						val inner = BlockResult(List(ExpressionResult(-0.5, line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(-0.5, line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Boolean" in {
 						val code = "def foo(a: Boolean, b: Boolean, c: Boolean) = a && b || c"
@@ -110,8 +110,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(false))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true)))
 						)
-						val inner = BlockResult(List(ExpressionResult(true, line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(true, line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Long" in {
 						val code = "def foo(a: Long, b: Long, c: Long) = a + b - c"
@@ -120,8 +120,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7)))
 						)
-						val inner = BlockResult(List(ExpressionResult(1, line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(1, line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Double" in {
 						val code = "def foo(a: Double, b: Double, c: Double) = a + b - c"
@@ -130,8 +130,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(2.5))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(4.5)))
 						)
-						val inner = BlockResult(List(ExpressionResult(-0.5, line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(-0.5, line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Byte" in {
 						val code = "def foo(a: Byte, b: Byte, c: Byte) = a + b - c"
@@ -140,8 +140,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7)))
 						)
-						val inner = BlockResult(List(ExpressionResult(1, line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(1, line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Short" in {
 						val code = "def foo(a: Short, b: Short, c: Short) = a + b - c"
@@ -150,8 +150,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7)))
 						)
-						val inner = BlockResult(List(ExpressionResult(1, line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(1, line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Char" in {
 						val code = """def addExclamation(a: Char, b: Char, c: Char) = s"$a! $b! $c!" """
@@ -160,8 +160,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant('b'))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant('c')))
 						)
-						val inner = BlockResult(List(ExpressionResult("a! b! c!", line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("addExclamation", params, None, inner, line = 1)))
+						val rhs = BlockResult(List(ExpressionResult("a! b! c!", line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("addExclamation", params, None, rhs, line = 1)))
 					}
 					"AnyVal" in {
 						val code = """def foo(a: AnyVal, b: AnyVal, c: AnyVal) = s"$a! $b! $c!" """
@@ -170,8 +170,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant('f'))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true)))
 						)
-						val inner = BlockResult(List(ExpressionResult("3! f! true!", line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult("3! f! true!", line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Any" in {
 						val code = """def foo(a: Any, b: Any, c: Any) = s"$a! $b! $c!" """
@@ -180,8 +180,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))),
 							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true)))
 						)
-						val inner = BlockResult(List(ExpressionResult("3! foo! true!", line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult("3! foo! true!", line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"AnyRef" in {
 						val code = """def bar(a: AnyRef, b: AnyRef, c: AnyRef) = s"$a! $b! $c!" """
@@ -190,8 +190,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))),
 							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Some")), List(Literal(Constant(5)))))
 						)
-						val inner = BlockResult(List(ExpressionResult("foo! List(3, 5, 7)! Some(5)!", line = 1)))					
-						computeResults(code) ==== BlockResult(List(DefDefResult("bar", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult("foo! List(3, 5, 7)! Some(5)!", line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("bar", params, None, rhs, line = 1)))
 					}
 					"List" in {
 						val code = "def foo(a: List[Int], b: List[Int], c: List[Int]) = if (c.isEmpty) a.length else b.length"
@@ -200,8 +200,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))),
 							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(11)))))
 						)
-						val inner = BlockResult(List(ExpressionResult(0, line = 1)))				
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(0, line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Option" in {
 						val code = "def foo(a: Option[String], b: Option[String], c: Option[String]) = if(c.isEmpty) b else a"
@@ -210,8 +210,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("None"))),
 							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Some")), List(Literal(Constant("bar")))))
 						)
-						val inner = BlockResult(List(ExpressionResult(Some("foo"), line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(Some("foo"), line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"Seq" in {
 						val code = "def foo(a: Seq[Boolean], b: Seq[Boolean], c: Seq[Boolean]) = if (c.isEmpty) a.length else b.take(1)"
@@ -220,8 +220,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))),
 							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Seq")), List(Literal(Constant(false)))))
 						)
-						val inner = BlockResult(List(ExpressionResult(List(), line = 1)))						
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(List(), line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 					"wildCardGeneric" in {
 						val code = "def foo(a: List[_], b: List[_], c: List[_]) = if (c.nonEmpty) a else b"
@@ -230,8 +230,8 @@ class ScalaCodeSheetSpec extends Specification {
 							AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))),
 							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(true)))))
 						)
-						val inner = BlockResult(List(ExpressionResult(List(3,5,7), line = 1)))		
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, inner, line = 1)))	
+						val rhs = BlockResult(List(ExpressionResult(List(3,5,7), line = 1)))
+						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
 					}
 				}/*
 				"custom class" in {

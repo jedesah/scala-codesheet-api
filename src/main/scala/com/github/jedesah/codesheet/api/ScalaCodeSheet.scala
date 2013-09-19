@@ -14,11 +14,14 @@ object ScalaCodeSheet {
     case class BlockResult(children: List[Result]) {
         def userRepr = childrenRepr(1)
         def wrappedUserRepr(at: Int, forceWrap: Boolean = false): String =
-            if (children.size > 1 || (forceWrap && children.size == 1)) {
-                val tabulate = (line: String) => if (line == "") "" else "\t" + line
-                "{" + childrenRepr(at).lines.map(tabulate).mkString("\n") + "\n}"
+            if (children.size > 1 || (forceWrap && children.size == 1))
+                " {" + childrenRepr(at).tabulate + "\n}"
+            else {
+                val singleChild = childrenRepr(at)
+                if (singleChild.isEmpty) ""
+                else if (!singleChild.contains("\n")) " " + singleChild
+                else singleChild.tabulate
             }
-            else childrenRepr(at)
         def childrenRepr(at: Int): String = children.foldLeft((at, "")) { case ((at, result), child) =>
             val newResult =
                 if (at == child.line && result != "") result + "; " + child.userRepr
@@ -28,25 +31,21 @@ object ScalaCodeSheet {
     }
     abstract class Result(val line: Int) {
         def userRepr: String
+        protected def userRepr(params: List[AssignOrNamedArg]) = if (params.length == 0) "" else "(" + params.mkString(", ") + ")"
     }
-    case class ValDefResult(name: String, inferredType: Option[String], inner: BlockResult, override val line: Int) extends Result(line) {
-        def userRepr = name + inferredType.map(": " + _).getOrElse("") + " = " + inner.wrappedUserRepr(line)
+    case class ValDefResult(name: String, inferredType: Option[String], rhs: BlockResult, override val line: Int) extends Result(line) {
+        def userRepr = name + inferredType.map(": " + _).getOrElse("") + " =" + rhs.wrappedUserRepr(line)
     }
-    case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], inner: BlockResult, override val line: Int) extends Result(line) {
-        def userRepr = name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + inferredType.map(": " + _).getOrElse("") + " => " + inner.wrappedUserRepr(line)
+    case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], rhs: BlockResult, override val line: Int) extends Result(line) {
+        def userRepr = name + userRepr(params) + inferredType.map(": " + _).getOrElse("") + " =>" + rhs.wrappedUserRepr(line)
     }
-    case class ClassDefResult(name: String, params: List[AssignOrNamedArg], inner: BlockResult, override val line: Int) extends Result(line) {
+    case class ClassDefResult(name: String, params: List[AssignOrNamedArg], body: BlockResult, override val line: Int) extends Result(line) {
+        def userRepr = name + userRepr(params) + body.wrappedUserRepr(line, forceWrap = true)
+    }
+    case class ModuleDefResult(name: String, body: BlockResult, override val line: Int) extends Result(line) {
         def userRepr = {
-            val body = inner.wrappedUserRepr(line, forceWrap = true)
-            val adaptedBody = if (body == "") "" else " " + body
-            name + (if (params.length == 0) "" else "(" + params.mkString(", ") + ")") + adaptedBody
-        }
-    }
-    case class ModuleDefResult(name: String, inner: BlockResult, override val line: Int) extends Result(line) {
-        def userRepr = {
-            val body = inner.wrappedUserRepr(line, forceWrap = true)
-            val adaptedBody = if (body == "") "" else " " + body
-            name + adaptedBody
+            val bodyString = body.wrappedUserRepr(line, forceWrap = true)
+            if (bodyString.isEmpty) "" else name + bodyString
         }
     }
     case class ExpressionResult(final_ : ValueResult, steps: List[Tree] = Nil, override val line: Int) extends Result(line) {
@@ -143,7 +142,7 @@ object ScalaCodeSheet {
             defdef.sampleParamsOption(classDefs) map { sampleValues =>
                 val newSymbols = updateSymbols(symbols, sampleValues)
                 val inner = evaluate(defdef.rhs, toolBox, newSymbols)
-                List(DefDefResult(defdef.name.toString, paramList(sampleValues), None, line = AST.pos.line, inner = BlockResult(inner)))
+                List(DefDefResult(defdef.name.toString, paramList(sampleValues), None, line = AST.pos.line, rhs = BlockResult(inner)))
             } getOrElse {
                 Nil
             }

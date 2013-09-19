@@ -81,6 +81,11 @@ class ScalaCodeSheetResult extends Specification {
 								 |}""".stripMargin
 				result.userRepr ==== expected
 			}
+			"on seperate line (no block)" in {
+				val result = ValDefResult("a", None, BlockResult(ExpressionResult(45, line = 2)), line = 1)
+				result.userRepr === """a =
+									  |	45""".stripMargin
+			}
 		}
 		"DefDefResult" in {
 			"simple block" in {
@@ -161,6 +166,19 @@ class ScalaCodeSheetResult extends Specification {
 				classDef.userRepr === """Cat(name = "foo", age = 3) {
 										|	humanAge(mult = 3) => 9
 										|}""".stripMargin
+			}
+		}
+		"ModuleDefResult" in {
+			"no body" in {
+				val result = ModuleDefResult("Test", BlockResult(Nil), line = 1)
+				result.userRepr === ""
+			}
+			"with body" in {
+				val body = BlockResult(List(DefDefResult("singular", Nil, None, BlockResult(List(ExpressionResult(9, line = 2))), line = 2)))
+				val result = ModuleDefResult("Test", body, line = 1)
+				result.userRepr === """Test {
+									  |	singular => 9
+									  |}""".stripMargin
 			}
 		}
 	}
