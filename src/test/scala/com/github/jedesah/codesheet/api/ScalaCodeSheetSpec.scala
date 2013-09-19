@@ -65,11 +65,19 @@ class ScalaCodeSheetSpec extends Specification {
 			"overlapping scope" in {
 				val code = """val a = 4
 							 |def tot(a: String) = a * 2""".stripMargin
-				val first = ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(4, line = 1))), line = 1)
-				val params = List(AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
-				val rhs = BlockResult(List(ExpressionResult("foofoo", line = 2)))
-				val second = DefDefResult("tot", inferredType = None, params = params, rhs = rhs, line = 2)
-				computeResults(code) ==== BlockResult(List(first, second))
+				computeResults(code) must beLike { case (BlockResult(List(first, second))) => {
+					first === ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(4, line = 1))), line = 1)
+					second must beLike { case DefDefResult("tot", params, None, rhs, 2) =>
+						rhs === BlockResult(List(ExpressionResult("foofoo", Nil, 2)))
+						params must beLike { case List(param) =>
+							val expected = AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo")))
+							if (param.equalsStructure(expected))
+								ok
+							else param === expected
+						}
+					}
+				}
+				}
 			}
 			"with params" in {
 				"basic types" in {
