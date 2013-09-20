@@ -158,7 +158,6 @@ object ScalaCodeSheet {
     def computeResults(code: String): BlockResult = try {
         val toolBox = cm.mkToolBox()
         val AST = toolBox.parse(code)
-        val outputResult = (0 until code.lines.size).map( _ => "").toList
         BlockResult(evaluate(AST, toolBox))
     } catch {
       case ToolBoxError(msg, cause) => {
