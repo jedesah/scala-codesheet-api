@@ -108,8 +108,8 @@ object ScalaCodeSheet {
 
       AST match {
         case ValDef(_, newTermName, _, assignee) => {
-            val inner = evaluate(assignee, toolBox, symbols)
-            List(ValDefResult(newTermName.toString, None, BlockResult(inner), line = AST.pos.line))
+            val rhs = evaluate(assignee, toolBox, symbols)
+            List(ValDefResult(newTermName.toString, None, BlockResult(rhs), line = AST.pos.line))
         }
         // We fold over each child and all of it's preceding childs (inits) and evaluate
         // it with it's preceding children
@@ -128,8 +128,8 @@ object ScalaCodeSheet {
                             case valDef: ValDef => !sampleValues.exists( sampleValDef => sampleValDef.name == valDef.name)
                             case other => other != constructor
                         }
-                        val inner = evaluateTypeDefBody(body, sampleValues)
-                        List(ClassDefResult(classDef.name.toString,paramList(sampleValues), inner, line = AST.pos.line))
+                        val bodyResult = evaluateTypeDefBody(body, sampleValues)
+                        List(ClassDefResult(classDef.name.toString,paramList(sampleValues), bodyResult, line = AST.pos.line))
                     }
                 } getOrElse {
                     Nil
@@ -141,8 +141,8 @@ object ScalaCodeSheet {
         case defdef : DefDef => {
             defdef.sampleParamsOption(classDefs) map { sampleValues =>
                 val newSymbols = updateSymbols(symbols, sampleValues)
-                val inner = evaluate(defdef.rhs, toolBox, newSymbols)
-                List(DefDefResult(defdef.name.toString, paramList(sampleValues), None, line = AST.pos.line, rhs = BlockResult(inner)))
+                val rhs = evaluate(defdef.rhs, toolBox, newSymbols)
+                List(DefDefResult(defdef.name.toString, paramList(sampleValues), None, line = AST.pos.line, rhs = BlockResult(rhs)))
             } getOrElse {
                 Nil
             }
