@@ -81,6 +81,11 @@ class ScalaCodeSheetResult extends Specification {
 								 |}""".stripMargin
 				result.userRepr ==== expected
 			}
+			"on seperate line (no block)" in {
+				val result = ValDefResult("a", None, BlockResult(ExpressionResult(45, line = 2)), line = 1)
+				result.userRepr === """a =
+									  |	45""".stripMargin
+			}
 		}
 		"DefDefResult" in {
 			"simple block" in {
@@ -142,9 +147,39 @@ class ScalaCodeSheetResult extends Specification {
 			result.userRepr === "Your code sucks dude"
 		}
 		"ClassDefResult" in {
-			val members = List(AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))))
-			val result = ClassDefResult("Dog", members, BlockResult(Nil), line = 1)
-			result.userRepr === "Dog(a = 5)"
+			"no body" in {
+				val members = List(AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))))
+				val result = ClassDefResult("Dog", members, BlockResult(Nil), line = 1)
+				result.userRepr === "Dog(a = 5)"
+			}
+			"with body" in {
+				val members = List(
+					AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))),
+					AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3)))
+				)
+				val params = List(
+					AssignOrNamedArg(Ident(newTermName("mult")), Literal(Constant(3)))
+				)
+				val innerFun = DefDefResult("humanAge", params, None, BlockResult(List(ExpressionResult(9, line = 2))), line = 2)
+
+				val classDef = ClassDefResult("Cat", members, BlockResult(List(innerFun)), line = 1)
+				classDef.userRepr === """Cat(name = "foo", age = 3) {
+										|	humanAge(mult = 3) => 9
+										|}""".stripMargin
+			}
+		}
+		"ModuleDefResult" in {
+			"no body" in {
+				val result = ModuleDefResult("Test", BlockResult(Nil), line = 1)
+				result.userRepr === ""
+			}
+			"with body" in {
+				val body = BlockResult(List(DefDefResult("singular", Nil, None, BlockResult(List(ExpressionResult(9, line = 2))), line = 2)))
+				val result = ModuleDefResult("Test", body, line = 1)
+				result.userRepr === """Test {
+									  |	singular => 9
+									  |}""".stripMargin
+			}
 		}
 	}
 }
