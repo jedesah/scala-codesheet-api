@@ -1,10 +1,20 @@
 package com.github.jedesah.codesheet.api
 
 import org.specs2.mutable._
+
 import ScalaCodeSheet._
+
+import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.universe._
+import scala.tools.reflect.ToolBox
 
 class ScalaCodeSheetSpec extends Specification {
+
+	def structureEquals(first:Tree, second:Tree) = 
+		if (first.equalsStructure(second)) ok
+		else first === second
+
+
 	"ScalaCodeSheet" should {
 		"expressions" in {
 			"literal" in {
@@ -65,195 +75,269 @@ class ScalaCodeSheetSpec extends Specification {
 			"overlapping scope" in {
 				val code = """val a = 4
 							 |def tot(a: String) = a * 2""".stripMargin
-				computeResults(code) must beLike { case (BlockResult(List(first, second))) => {
+				computeResults(code) must beLike { case BlockResult(List(first, second)) =>
 					first === ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(4, line = 1))), line = 1)
 					second must beLike { case DefDefResult("tot", params, None, rhs, 2) =>
 						rhs === BlockResult(List(ExpressionResult("foofoo", Nil, 2)))
 						params must beLike { case List(param) =>
-							val expected = AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo")))
-							if (param.equalsStructure(expected))
-								ok
-							else param === expected
+							structureEquals(param, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
 						}
 					}
-				}
 				}
 			}
 			"with params" in {
 				"basic types" in {
 					"Int" in {
 						val code = "def foo(a: Int, b: Int, c: Int) = a + b - c"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7)))
-						)
-						val rhs = BlockResult(List(ExpressionResult(1, line = 1)))
-						computeResults(code) ====  BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(1, Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))	
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7))))
+								}
+							}
+						}
 					}
 					"String" in {
 						val code = """def addExclamation(a: String, b: String, c: String) = s"$a! $b! $c!" """
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("bar"))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant("biz")))
-						)
-						val rhs = BlockResult(List(ExpressionResult("foo! bar! biz!", line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("addExclamation", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("addExclamation", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult("foo! bar! biz!", Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("bar"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant("biz"))))
+								}
+							}
+						}						
 					}
 					"Float" in {
 						val code = "def foo(a: Float, b: Float, c: Float) = a + b - c"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(1.5))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(2.5))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(4.5)))
-						)
-						val rhs = BlockResult(List(ExpressionResult(-0.5, line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(-0.5, Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(1.5f))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(2.5f))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(4.5f))))
+								}
+							}
+						}
 					}
 					"Boolean" in {
 						val code = "def foo(a: Boolean, b: Boolean, c: Boolean) = a && b || c"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(true))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(false))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true)))
-						)
-						val rhs = BlockResult(List(ExpressionResult(true, line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(true, Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(true))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(false))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true))))
+								}
+							}
+						}
 					}
 					"Long" in {
 						val code = "def foo(a: Long, b: Long, c: Long) = a + b - c"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7)))
-						)
-						val rhs = BlockResult(List(ExpressionResult(1, line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) => {
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(1, Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7))))
+								}
+							}
+						}
+						}
 					}
 					"Double" in {
 						val code = "def foo(a: Double, b: Double, c: Double) = a + b - c"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(1.5))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(2.5))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(4.5)))
-						)
-						val rhs = BlockResult(List(ExpressionResult(-0.5, line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(-0.5, Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(1.5))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(2.5))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(4.5))))
+								}
+							}
+						}
 					}
 					"Byte" in {
 						val code = "def foo(a: Byte, b: Byte, c: Byte) = a + b - c"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7)))
-						)
-						val rhs = BlockResult(List(ExpressionResult(1, line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(1, Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7))))
+								}
+							}
+						}						
 					}
 					"Short" in {
 						val code = "def foo(a: Short, b: Short, c: Short) = a + b - c"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7)))
-						)
-						val rhs = BlockResult(List(ExpressionResult(1, line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(1, Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7))))
+								}
+							}
+						}
 					}
 					"Char" in {
 						val code = """def addExclamation(a: Char, b: Char, c: Char) = s"$a! $b! $c!" """
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant('a'))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant('b'))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant('c')))
-						)
-						val rhs = BlockResult(List(ExpressionResult("a! b! c!", line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("addExclamation", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("addExclamation", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult("a! b! c!", Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant('a'))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant('b'))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant('c'))))
+								}
+							}
+						}						
 					}
 					"AnyVal" in {
 						val code = """def foo(a: AnyVal, b: AnyVal, c: AnyVal) = s"$a! $b! $c!" """
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant('f'))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true)))
-						)
-						val rhs = BlockResult(List(ExpressionResult("3! f! true!", line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult("3! f! true!", Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant('f'))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true))))
+								}
+							}
+						}	
 					}
 					"Any" in {
 						val code = """def foo(a: Any, b: Any, c: Any) = s"$a! $b! $c!" """
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))),
-							AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))),
-							AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true)))
-						)
-						val rhs = BlockResult(List(ExpressionResult("3! foo! true!", line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult("3! foo! true!", Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true))))
+								}
+							}
+						}
 					}
 					"AnyRef" in {
 						val code = """def bar(a: AnyRef, b: AnyRef, c: AnyRef) = s"$a! $b! $c!" """
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))),
-							AssignOrNamedArg(Ident(newTermName("b")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))),
-							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Some")), List(Literal(Constant(5)))))
-						)
-						val rhs = BlockResult(List(ExpressionResult("foo! List(3, 5, 7)! Some(5)!", line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("bar", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("bar", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult("foo! List(3, 5, 7)! Some(5)!", Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Some")), List(Literal(Constant(5))))))
+								}
+							}
+						}
 					}
 					"List" in {
 						val code = "def foo(a: List[Int], b: List[Int], c: List[Int]) = if (c.isEmpty) a.length else b.length"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))),
-							AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))),
-							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(11)))))
-						)
-						val rhs = BlockResult(List(ExpressionResult(0, line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(0, Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(11))))))
+								}
+							}
+						}						
 					}
 					"Option" in {
 						val code = "def foo(a: Option[String], b: Option[String], c: Option[String]) = if(c.isEmpty) b else a"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Some")), List(Literal(Constant("foo"))))),
-							AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("None"))),
-							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Some")), List(Literal(Constant("bar")))))
-						)
-						val rhs = BlockResult(List(ExpressionResult(Some("foo"), line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(Some("foo"), Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Some")), List(Literal(Constant("foo"))))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("None"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Some")), List(Literal(Constant("bar"))))))
+								}
+							}
+						}
 					}
 					"Seq" in {
 						val code = "def foo(a: Seq[Boolean], b: Seq[Boolean], c: Seq[Boolean]) = if (c.isEmpty) a.length else b.take(1)"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Seq")), List(Literal(Constant(true)), Literal(Constant(false)), Literal(Constant(true))))),
-							AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))),
-							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Seq")), List(Literal(Constant(false)))))
-						)
-						val rhs = BlockResult(List(ExpressionResult(List(), line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(List(), Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Seq")), List(Literal(Constant(true)), Literal(Constant(false)), Literal(Constant(true))))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("Seq")), List(Literal(Constant(false))))))
+								}
+							}
+						}
 					}
 					"wildCardGeneric" in {
 						val code = "def foo(a: List[_], b: List[_], c: List[_]) = if (c.nonEmpty) a else b"
-						val params = List(
-							AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))),
-							AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))),
-							AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(true)))))
-						)
-						val rhs = BlockResult(List(ExpressionResult(List(3,5,7), line = 1)))
-						computeResults(code) ==== BlockResult(List(DefDefResult("foo", params, None, rhs, line = 1)))
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(List(3, 5, 7), Nil, 1)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(true))))))
+								}
+							}
+						}						
 					}
-				}/*
+				}
 				"custom class" in {
 					"case" in {
 						"one case class definition" in {
 							"one param occurence" in {
 								val code = """case class Car(year: Int, model: String)
 										| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
-								ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo")) => foo-3""")
+								computeResults(code) must beLike { case BlockResult(List(first, second)) =>
+									first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+										}
+									} 
+									second must beLike { case DefDefResult("foo", params, None, rhs, 2) =>
+										rhs === BlockResult(List(ExpressionResult("foo-3", Nil, 2)))
+										params must beLike { case List(a) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo"))))))
+										}
+									}
+								}
+	
 							}
 							"two param occurence" in {
 								val code = """case class Car(year: Int, model: String)
 										| def foo(a: Car, b: Car) = a.year - b.year""".stripMargin
-								ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = Car(3, "foo"), b = Car(5, "bar")) => -2""")
+								computeResults(code) must beLike { case BlockResult(List(first, second)) =>
+									first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+										}
+									} 
+									second must beLike { case DefDefResult("foo", params, None, rhs, 2) =>
+										rhs === BlockResult(List(ExpressionResult(-2, Nil, 2)))
+										params must beLike { case List(a, b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo"))))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Apply(Ident(newTermName("Car")), List(Literal(Constant(5)),Literal(Constant("bar"))))))
+										}
+									}
+								}
+	
 							}
 						}
 						"two case class definitions" in {
@@ -261,23 +345,51 @@ class ScalaCodeSheetSpec extends Specification {
 								val code = """case class Car(year: Int, model: String)
 									  | case class Person(name: String, age: Int)
 									  | def isMatch(car: Car) = car.year""".stripMargin
-								val result = List(
-									"",
-									"",
-									"""isMatch(car = Car(3, "foo")) => 3"""
-								)
-								ScalaCodeSheet.computeResults(code) ==== result
+								computeResults(code) must beLike { case BlockResult(List(first, second, third)) =>
+									first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+										}
+									}
+									second must beLike {case ClassDefResult("Person", params, BlockResult(Nil), 2) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
+										}
+									} 								 
+									third must beLike { case DefDefResult("isMatch", params, None, rhs, 3) =>
+										rhs === BlockResult(List(ExpressionResult(3, Nil, 3)))
+										params must beLike { case List(a) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("car")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo"))))))
+										}
+									}
+								}
 							}
 							"use of second one" in {
 								val code = """case class Car(year: Int, model: String)
 									  | case class Person(name: String, age: Int)
 									  | def isMatch(person: Person) = person.name""".stripMargin
-								val result = List(
-									"",
-									"",
-									"""isMatch(person = Person("foo", 3)) => foo"""
-								)
-								ScalaCodeSheet.computeResults(code) ==== result
+								computeResults(code) must beLike { case BlockResult(List(first, second, third)) =>
+									first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+										}
+									}
+									second must beLike {case ClassDefResult("Person", params, BlockResult(Nil), 2) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
+										}
+									} 								 
+									third must beLike { case DefDefResult("isMatch", params, None, rhs, 3) =>
+										rhs === BlockResult(List(ExpressionResult("foo", Nil, 3)))
+										params must beLike { case List(a) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("person")), Apply(Ident(newTermName("Person")), List(Literal(Constant("foo")),Literal(Constant(3))))))
+										}
+									}
+								}
 							}
 						}
 						"multiple case class definitions" in {
@@ -287,39 +399,96 @@ class ScalaCodeSheetSpec extends Specification {
 										  | case class Person(name: String, age: Int)
 										  | case class Document(text: String, author: String)
 										  | def isMatch(doc: Document) = doc.author""".stripMargin
-									val result = List(
-										"",
-										"",
-										"",
-										"""isMatch(doc = Document("foo", "bar")) => bar"""
-									)
-									ScalaCodeSheet.computeResults(code) ==== result
+									computeResults(code) must beLike { case BlockResult(List(first, second, third, fourth)) =>
+										first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+											}
+										}
+										second must beLike {case ClassDefResult("Person", params, BlockResult(Nil), 2) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
+											}
+										} 
+										third must beLike {case ClassDefResult("Document", params, BlockResult(Nil), 3) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
+											}
+										} 																	 
+										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
+											rhs === BlockResult(List(ExpressionResult("bar", Nil, 4)))
+											params must beLike { case List(a) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("doc")), Apply(Ident(newTermName("Document")), List(Literal(Constant("foo")),Literal(Constant("bar"))))))
+											}
+										}
+									}
 								}
 								"case 2" in {
 									val code = """case class Car(year: Int, model: String)
 										  | case class Person(name: String, age: Int)
 										  | case class Document(text: String, author: String)
 										  | def isMatch(person: Person) = person.name""".stripMargin
-									val result = List(
-										"",
-										"",
-										"",
-										"""isMatch(person = Person("foo", 3)) => foo"""
-									)
-									ScalaCodeSheet.computeResults(code) ==== result
+									computeResults(code) must beLike { case BlockResult(List(first, second, third, fourth)) =>
+										first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+											}
+										}
+										second must beLike {case ClassDefResult("Person", params, BlockResult(Nil), 2) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
+											}
+										} 
+										third must beLike {case ClassDefResult("Document", params, BlockResult(Nil), 3) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
+											}
+										} 																	 
+										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
+											rhs === BlockResult(List(ExpressionResult("foo", Nil, 4)))
+											params must beLike { case List(a) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("person")), Apply(Ident(newTermName("Person")), List(Literal(Constant("foo")),Literal(Constant(3))))))
+											}
+										}
+									}
 								}
 								"case 3" in {
 									val code = """case class Car(year: Int, model: String)
 										  | case class Person(name: String, age: Int)
 										  | case class Document(text: String, author: String)
 										  | def isMatch(car: Car) = car.year""".stripMargin
-									val result = List(
-										"",
-										"",
-										"",
-										"""isMatch(car = Car(3, "foo")) => 3"""
-									)
-									ScalaCodeSheet.computeResults(code) ==== result
+									computeResults(code) must beLike { case BlockResult(List(first, second, third, fourth)) =>
+										first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+											}
+										}
+										second must beLike {case ClassDefResult("Person", params, BlockResult(Nil), 2) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
+											}
+										} 
+										third must beLike {case ClassDefResult("Document", params, BlockResult(Nil), 3) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
+											}
+										} 																	 
+										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
+											rhs === BlockResult(List(ExpressionResult(3, Nil, 4)))
+											params must beLike { case List(a) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("car")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo"))))))
+											}
+										}
+									}
 								}
 							}
 							"multiple occurences" in {
@@ -327,13 +496,33 @@ class ScalaCodeSheetSpec extends Specification {
 									  | case class Person(name: String, age: Int)
 									  | case class Document(text: String, author: String)
 									  | def isMatch(doc: Document, peps: Person) = doc.author == peps.name""".stripMargin
-								val result = List(
-									"",
-									"",
-									"",
-									"""isMatch(doc = Document("foo", "bar"), peps = Person("biz", 3)) => false"""
-								)
-								ScalaCodeSheet.computeResults(code) ==== result
+									computeResults(code) must beLike { case BlockResult(List(first, second, third, fourth)) =>
+										first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+											}
+										}
+										second must beLike {case ClassDefResult("Person", params, BlockResult(Nil), 2) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
+											}
+										} 
+										third must beLike {case ClassDefResult("Document", params, BlockResult(Nil), 3) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
+											}
+										} 																	 
+										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
+											rhs === BlockResult(List(ExpressionResult(false, Nil, 4)))
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("doc")), Apply(Ident(newTermName("Document")), List(Literal(Constant("foo")),Literal(Constant("bar"))))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("peps")), Apply(Ident(newTermName("Person")), List(Literal(Constant("biz")),Literal(Constant(3))))))
+											}
+										}
+									}
 							}
 						}
 						"multiple function definitions" in {
@@ -342,50 +531,136 @@ class ScalaCodeSheetSpec extends Specification {
 									  | case class Document(text: String, author: String)
 									  | def isMatch(doc: Document, peps: Person) = doc.author == peps.name
 									  | def barCode(car: Car) = car.model + "-" + car.year""".stripMargin
-							val result = List(
-								"",
-								"",
-								"",
-								"""isMatch(doc = Document("foo", "bar"), peps = Person("biz", 3)) => false""",
-								"""barCode(car = Car(3, "foo")) => foo-3"""
-							)
-							ScalaCodeSheet.computeResults(code) ==== result
-						}
+									computeResults(code) must beLike { case BlockResult(List(first, second, third, fourth, fifth)) =>
+										first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+											}
+									}
+										second must beLike {case ClassDefResult("Person", params, BlockResult(Nil), 2) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
+											}
+									} 
+										third must beLike {case ClassDefResult("Document", params, BlockResult(Nil), 3) =>
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
+											}
+									} 																	 
+										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
+											rhs === BlockResult(List(ExpressionResult(false, Nil, 4)))
+											params must beLike { case List(a,b) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("doc")), Apply(Ident(newTermName("Document")), List(Literal(Constant("foo")),Literal(Constant("bar"))))))
+												structureEquals(b, AssignOrNamedArg(Ident(newTermName("peps")), Apply(Ident(newTermName("Person")), List(Literal(Constant("biz")),Literal(Constant(3))))))
+											}
+										}
+										fifth must beLike { case DefDefResult("barCode", params, None, rhs, 5) =>
+											rhs === BlockResult(List(ExpressionResult("foo-3", Nil, 5)))
+											params must beLike { case List(a) =>
+												structureEquals(a, AssignOrNamedArg(Ident(newTermName("car")), Apply(Ident(newTermName("Car")), List(Literal(Constant(3)),Literal(Constant("foo"))))))
+											}
+										}
+									}
+							}
 					}
 					"normal" in {
 						"one" in {
 							val code = """class Car(val year: Int, val model: String)
 										| def foo(a: Car) = a.model + "-" + a.year""".stripMargin
-							ScalaCodeSheet.computeResults(code) ==== List("", """foo(a = new Car(3, "foo")) => foo-3""")
+								computeResults(code) must beLike { case BlockResult(List(first, second)) =>
+									first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+										}
+									} 
+									second must beLike { case DefDefResult("foo", params, None, rhs, 2) =>
+										rhs === BlockResult(List(ExpressionResult("foo-3", Nil, 2)))
+										params must beLike { case List(a) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Select(New(Ident(newTypeName("Car"))), nme.CONSTRUCTOR), List(Literal(Constant(3)), Literal(Constant("foo"))))))
+										}
+									}
+								}	
 						}
 						"three" in {
 							val code = """class Car(val year: Int, val model: String)
 										| class Hut(oui: Boolean, tot: String)
 										| class Fat(var calorie: Int, var heat: Int)
 										| def foo(a: Car, b: Hut, c: Fat) = a.model + "-" + a.year""".stripMargin
-							var result = List(
-								"",
-								"",
-								"",
-								"""foo(a = new Car(3, "foo"), b = new Hut(true, "bar"), c = new Fat(5, 7)) => foo-3"""
-							)
-							ScalaCodeSheet.computeResults(code) ==== result
+								computeResults(code) must beLike { case BlockResult(List(first, second, third, fourth)) =>
+									first must beLike {case ClassDefResult("Car", params, BlockResult(Nil), 1) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+										}
+									}
+									second must beLike {case ClassDefResult("Hut", params, BlockResult(Nil), 2) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("oui")), Literal(Constant(true))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("tot")), Literal(Constant("foo"))))
+										}
+									} 
+									third must beLike {case ClassDefResult("Fat", params, BlockResult(Nil), 3) =>
+										params must beLike { case List(a,b) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("calorie")), Literal(Constant(3))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("heat")), Literal(Constant(5))))
+										}
+									} 																
+									fourth must beLike { case DefDefResult("foo", params, None, rhs, 4) =>
+										rhs === BlockResult(List(ExpressionResult("foo-3", Nil, 4)))
+										params must beLike { case List(a, b, c) =>
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Select(New(Ident(newTypeName("Car"))), nme.CONSTRUCTOR), List(Literal(Constant(3)), Literal(Constant("foo"))))))
+											structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Apply(Select(New(Ident(newTypeName("Hut"))), nme.CONSTRUCTOR), List(Literal(Constant(true)), Literal(Constant("bar"))))))
+											structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Select(New(Ident(newTypeName("Fat"))), nme.CONSTRUCTOR), List(Literal(Constant(5)), Literal(Constant(7))))))
+										}
+									}
+								}
+							}
+						}
+					}	
+				"mixed" in {
+					val code = """def foo(a: Int, b: String, c: Boolean) = if (c) a else b.length"""
+					computeResults(code) must beLike { case BlockResult(List(first)) =>
+						first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+							rhs === BlockResult(List(ExpressionResult(3, Nil, 1)))
+							params must beLike { case List(a,b,c) =>
+								structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+								structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))))
+								structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true))))
+							}
 						}
 					}
 				}
-				"mixed" in {
-					val code = """def foo(a: Int, b: String, c: Boolean) = if (c) a else b.length"""
-					ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""")
-				}
 				"with default Values" in {
 					val code = "def foo(a: Int, b: Int = 10, c: Int = 1) = a + b - c"
-					ScalaCodeSheet.computeResults(code) ==== List("foo(a = 3, b = 10, c = 1) => 12")
+					computeResults(code) must beLike { case BlockResult(List(first)) =>
+						first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+							rhs === BlockResult(List(ExpressionResult(12, Nil, 1)))
+							params must beLike { case List(a,b,c) =>
+								structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+								structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(10))))
+								structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(1))))
+							}
+						}
+					}
 				}
 				"multiline" in {
 					"one expression" in {
 						val code = """def foo(a: Int, b: String, c: Boolean) =
 									| 	if (c) a else b.length""".stripMargin
-						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""", "")
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(3, Nil, 2)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true))))
+								}
+							}
+						}
 					}
 					"one expression on 4 lines" in {
 						val code = """def foo(a: Int, b: String, c: Boolean) =
@@ -393,7 +668,16 @@ class ScalaCodeSheetSpec extends Specification {
 									|		a
 									|	else
 									|		b""".stripMargin
-						ScalaCodeSheet.computeResults(code) ==== List("""foo(a = 3, b = "foo", c = true) => 3""", "", "", "", "")
+						computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult(3, Nil, 2)))
+								params must beLike { case List(a,b,c) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true))))
+								}
+							}
+						}
 					}
 					"one complex expression on 4 lines" in {
 						val code = """def foo(a: List[Int], b: String, c: String, d: Boolean, e: Boolean) =
@@ -401,14 +685,18 @@ class ScalaCodeSheetSpec extends Specification {
 									|		b.take(2) + c.drop(3)
 									|	else
 									|		b.take(3) + c.drop(1)""".stripMargin
-						val result = List(
-							"""foo(a = List(3, 5, 7), b = "foo", c = "bar", d = true, e = false) => fooar""",
-							"",
-							"",
-							"",
-							""
-						)
-						ScalaCodeSheet.computeResults(code) ==== result
+							computeResults(code) must beLike { case BlockResult(List(first)) =>
+							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs === BlockResult(List(ExpressionResult("fooar", Nil, 2)))
+								params must beLike { case List(a,b,c,d,e) =>
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)),Literal(Constant(5)),Literal(Constant(7))))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))))
+									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant("bar"))))
+									structureEquals(d, AssignOrNamedArg(Ident(newTermName("d")), Literal(Constant(true))))
+									structureEquals(e, AssignOrNamedArg(Ident(newTermName("e")), Literal(Constant(false))))
+								}
+							}
+						}									
 					}
 					"multiple inner value definition" in {
 						val code = """def foo(a: List[Int], b: Int) = {
@@ -416,93 +704,203 @@ class ScalaCodeSheetSpec extends Specification {
 									|	val almostDone = b :: temp
 									|	almostDone.dropRight(1)
 									| }""".stripMargin
-						val result = List(
-							"""foo(a = List(3, 5, 7), b = 11) => List(11, 3, 5)""",
-							"temp = List(3, 5, 7)",
-							"almostDone = List(11, 3, 5, 7)",
-							"List(11, 3, 5)",
-							""
-						)
-						ScalaCodeSheet.computeResults(code) ==== result
+						computeResults(code) must beLike { case BlockResult(List(defdef)) =>
+						defdef must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+							params must beLike { case List(a,b) =>
+								structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)),Literal(Constant(5)),Literal(Constant(7))))))
+								structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(11))))
+							}
+							rhs === BlockResult(List(
+										ValDefResult("temp", None, rhs = BlockResult(List(ExpressionResult(List(3, 5, 7), line = 2))), line = 2),
+										ValDefResult("almostDone", None, rhs = BlockResult(List(ExpressionResult(List(11, 3, 5, 7), line = 3))), line = 3),
+										ExpressionResult(List(11, 3, 5), Nil, 4)	
+							))
+							}										
+						}
 					}
-				}*/
+				}
 			}	
 		}
 		
-		/*"value definition" in {
+		"value definition" in {
 			"simple" in {
 				val code = "val a = 34"
-				ScalaCodeSheet.computeResults(code) ==== List("")
+				computeResults(code) must beLike { case BlockResult(List(first)) =>
+					first === ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(34, line = 1))), line = 1)
+				}
 			}
 			"complex" in {
 				val code = "val a = 2 * 3 - 2"
-				ScalaCodeSheet.computeResults(code) ==== List("a = 4")
+				computeResults(code) must beLike { case BlockResult(List(first)) =>
+					first === ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(4, line = 1))), line = 1)
+				}
 			}
 			"with use" in {
 				val code = """val a = 34
 							| a + 10""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("", "44")
+				computeResults(code) must beLike { case BlockResult(List(first, second)) =>
+					first === ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(34, line = 1))), line = 1)
+					second === ExpressionResult(44, Nil, 2)
+				}						
 			}
 			"value is function application" in {
 				val code = """def perform(a: Int) = a + 5
 							| val gg = perform(4)""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("perform(a = 3) => 8", "gg = 9")
+				computeResults(code) must beLike { case BlockResult(List(first, second)) =>
+					first must beLike {case DefDefResult("perform", params, None, rhs, 1) =>
+						rhs === BlockResult(List(ExpressionResult(8, Nil, 1)))
+						params must beLike { case List(a) => structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+						}
+					}
+					second === ValDefResult("gg", None, rhs = BlockResult(List(ExpressionResult(9, line = 2))), line = 2)
+				}
 			}
 		}
-
+		
 		"class definition" in {
 			"simple" in {
 				val code = "class Car(model: String, year: Int)"
-				ScalaCodeSheet.computeResults(code) ==== List("")
+				computeResults(code) must beLike { case BlockResult(List(classDef)) =>
+				 	classDef must beLike {case ClassDefResult("Car", params, BlockResult(Nil),1) =>
+						params must beLike { case List(a, b) => 
+							structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+							structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+				 		} 
+					}
+				}
 			}
 			"with instantiation" in {
 				val code = """case class Car(model: String, year: Int)
-							| val test = Car("Fiat", 1999)""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("", "")
+							 | val test = Car("Fiat", 1999)""".stripMargin
+				computeResults(code) must beLike { case BlockResult(List(classDef, valDef)) =>
+				 	classDef must beLike {case ClassDefResult("Car", params, BlockResult(Nil),1) =>
+						params must beLike { case List(a, b) => 
+							structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+							structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+				 		} 
+					}
+				 	valDef must beLike {case ValDefResult("test", None, rhs, 2) =>
+						rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(obj), Nil, 2))) =>
+							obj.toString === "Car(Fiat,1999)"
+				 		} 
+					}					
+				}
 			}
 			"with use" in {
 				val code = """case class Car(model: String, year: Int)
 							| val test = Car("Fiat", 1999)
 							| test.model
 							| test.year""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("", "", "Fiat", "1999")
+				computeResults(code) must beLike { case BlockResult(List(classDef, valDef, expression1, expression2)) =>
+				 	classDef must beLike {case ClassDefResult("Car", params, BlockResult(Nil),1) =>
+						params must beLike { case List(a, b) => 
+							structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+							structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+				 		} 
+					}
+				 	valDef must beLike {case ValDefResult("test", None, rhs, 2) =>
+						rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(obj), Nil, 2))) =>
+							obj.toString === "Car(Fiat,1999)"
+				 		} 
+					}
+					expression1 === ExpressionResult("Fiat", Nil, 3)
+					expression2 === ExpressionResult(1999, Nil, 4)					
+				}
 			}
 			"complex" in {
 				"1" in {
-					val code = """case class Car(model: String, year: Int) {
-								| 	def drive { println("vroum vroum")}
-								| }
-								| val a = new Car("BMW", 2013)
-								| a.drive""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "", "")
-				}
+						val code = """case class Car(model: String, year: Int) {
+									| 	def drive { println("vroum vroum")}
+									| }
+									| val a = new Car("BMW", 2013)
+									| a.drive""".stripMargin
+						computeResults(code) must beLike { case BlockResult(List(classDef, valDef, expression1)) =>
+						 	classDef must beLike {case ClassDefResult("Car", params, body,1) =>
+								params must beLike { case List(a, b) => 
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+						 		}
+						 		body === BlockResult(List(DefDefResult("drive", Nil, None, BlockResult(List(ExpressionResult((), Nil, 2))), 2))) 
+							}
+						 	valDef must beLike {case ValDefResult("a", None, rhs, 4) =>
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(obj), Nil, 4))) =>
+									obj.toString === "Car(BMW,2013)"
+						 		} 
+							}
+							expression1 === ExpressionResult((), Nil, 5)
+						}
+					}
 				"2" in {
 					val code = """case class Car(model: String, year: Int) {
 								|	def license(seed: Int) = model.take(seed) + year + seed
 								| }""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("""Car(model = "foo", year = 3) {""", "license(seed = 3) => foo33", "}")
-				}
+						computeResults(code) must beLike { case BlockResult(List(classDef)) =>
+						 	classDef must beLike {case ClassDefResult("Car", params, body,1) =>
+								params must beLike { case List(a, b) => 
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+						 		}
+						 		body must beLike{case BlockResult(List(DefDefResult("license", params, None, BlockResult(List(ExpressionResult(ObjectResult("foo33"), Nil, 2))), 2))) =>
+						 			params must beLike { case List(seed) => 
+										structureEquals(seed, AssignOrNamedArg(Ident(newTermName("seed")), Literal(Constant(3))))
+						 			} 
+						 		} 
+							}
+						}
+					}
 				"3" in {
 					val code = """case class Car(model: String, year: Int) {
 								|	def license = 5
 								| }""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "", "")
-				}
+						computeResults(code) must beLike { case BlockResult(List(classDef)) =>
+						 	classDef must beLike {case ClassDefResult("Car", params, body,1) =>
+								params must beLike { case List(a, b) => 
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+						 		}
+						 		body === BlockResult(List(DefDefResult("license", Nil, None, BlockResult(List(ExpressionResult(5, Nil, 2))), 2))) 
+							}
+						}
+					}
 				"4" in {
 					val code = """case class Car(model: String, year: Int) {
 								|	val a = 5
 								|	val b = (a + year).toString + model
 								| }""".stripMargin
-					val expected = List("""Car(model = "foo", year = 3) {""", "", "b = 8foo", "}")
-					ScalaCodeSheet.computeResults(code) ==== expected
-				}
+						computeResults(code) must beLike { case BlockResult(List(classDef)) =>
+						 	classDef must beLike {case ClassDefResult("Car", params, body,1) =>
+								params must beLike { case List(a, b) => 
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+						 		}
+						 		body === BlockResult(List(
+						 			ValDefResult("a", None, BlockResult(List(ExpressionResult(5, Nil, 2))), 2),
+						 			ValDefResult("b", None, BlockResult(List(ExpressionResult("8foo", Nil, 3))), 3))) 
+							}
+						}
+					}	
 				"5" in {
 					val code = """case class Car(model: String, year: Int) {
 								|	val aabb = List(1,2,4,5).take(2)
 								|	def wtv(a: Int) = aabb.drop(a)
 								| }""".stripMargin
-					val expected = List("""Car(model = "foo", year = 3) {""", "aabb = List(1, 2)", "wtv(a = 3) => List()", "}")
-					ScalaCodeSheet.computeResults(code) ==== expected
+						computeResults(code) must beLike { case BlockResult(List(classDef)) =>
+						 	classDef must beLike {case ClassDefResult("Car", params, body,1) =>
+								params must beLike { case List(a, b) => 
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+						 		}
+						 		body must beLike{ case BlockResult(List( valDef, defDef)) =>
+						 			valDef === ValDefResult("aabb", None, BlockResult(List(ExpressionResult(List(1, 2), Nil, 2))), 2)
+						 			defDef must beLike {case DefDefResult("wtv", params, None, body, 3) => 
+										params must beLike { case List(a) => 
+											structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+								 		}
+										body === BlockResult(List(ExpressionResult(Nil, Nil, 3)))
+						 			}
+						 		} 						 			
+							}
+						}
 				}
 			}
 			"abstract" in {
@@ -510,53 +908,90 @@ class ScalaCodeSheetSpec extends Specification {
 					val code = """abstract class Pug {
 								|	val a: Int
 								| }""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "", "")
+					computeResults(code) ==== BlockResult(Nil)
 				}
 				"one function definition" in {
 					val code = """abstract class Pet {
 								|	def af(g: Int): Boolean
 								| }""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "", "")
+					computeResults(code) ==== BlockResult(Nil)
 				}
 				"one function definition followed by evaluated expression" in {
 					val code = """abstract class Pet {
 								|	def af(g: Int): Boolean
 								| }
 								| val a = 5 + 5""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "a = 10")
+					computeResults(code) ==== BlockResult(List(ValDefResult("a", None, BlockResult(List(ExpressionResult(10, Nil, 4))), 4)))
 				}
 			}
 		}
-
 		"object definition" in {
 			"with only simple values" in {
 				val code = """object MySingleton {
 							|	val a = 5
 							|	val tretre = "goo"
 							| }""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("", "", "", "")
+				computeResults(code) must beLike{ case BlockResult(List(moduleDef)) =>
+					moduleDef must beLike{ case ModuleDefResult("MySingleton", body, 1) =>
+						body === BlockResult(List(
+							ValDefResult("a", None, BlockResult(List(ExpressionResult(5, Nil, 2))), 2),
+							ValDefResult("tretre", None, BlockResult(List(ExpressionResult("goo", Nil, 3))), 3)
+						))
+					}
+				}
 			}
 			"with only values" in {
 				val code = """object MySingleton {
 						|	val a = 5
 						|	val b = a + 4
 						| }""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", "", "b = 9", "}")
+				computeResults(code) must beLike{ case BlockResult(List(moduleDef)) =>
+					moduleDef must beLike{ case ModuleDefResult("MySingleton", body, 1) =>
+						body === BlockResult(List(
+							ValDefResult("a", None, BlockResult(List(ExpressionResult(5, Nil, 2))), 2),
+							ValDefResult("b", None, BlockResult(List(ExpressionResult(9, Nil, 3))), 3)
+						))
+					}
+				}
 			}
 			"with function definition" in {
 				val code = """object MySingleton {
 							|	def jade(a: String, b: Int) = a + a
 							| }""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", """jade(a = "foo", b = 3) => foofoo""", "}")
+				computeResults(code) must beLike{ case BlockResult(List(moduleDef)) =>
+					moduleDef must beLike{ case ModuleDefResult("MySingleton", body, 1) =>
+						body must beLike { case BlockResult(List(defDef)) =>
+							defDef must beLike{ case DefDefResult("jade", params, None, rhs, 2) =>
+								params must beLike { case List(a, b) => 
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(3))))
+								}
+								rhs === BlockResult( List(ExpressionResult("foofoo", Nil, 2)))
+							}
+						}
+					}
+				}
 			}
 			"with values and definitions" in {
 				val code = """object MySingleton {
 							|	val aabb = 45 + 12
 							|	def blabla(a: Char) = aabb.toString + a
 							| }""".stripMargin
-				ScalaCodeSheet.computeResults(code) ==== List("MySingleton {", "aabb = 57", "blabla(a = 'a') => 57a", "}")
+				computeResults(code) must beLike{ case BlockResult(List(moduleDef)) =>
+					moduleDef must beLike { case ModuleDefResult("MySingleton", body, 1) =>
+						body must beLike { case BlockResult(List(valDef, defDef)) =>
+							valDef === ValDefResult("aabb", None, BlockResult(List(ExpressionResult(57, Nil, 2))), 2)
+							defDef must beLike{ case DefDefResult("blabla", params, None, rhs, 3) =>
+								params must beLike { case List(a) => 
+									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant('a'))))
+								}
+								rhs === BlockResult( List(ExpressionResult("57a", Nil, 3)))
+							}
+						}
+					}
+				}
 			}
-		}
+		}/*
 		"sample generation" in {
 			"abstract class" in {
 				"simple hierarchy" in {
