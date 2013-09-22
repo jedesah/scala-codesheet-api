@@ -70,6 +70,7 @@ object ScalaCodeSheet {
         }
     }
     implicit def createObjectResult(value: Any) = ObjectResult(value)
+    implicit def createBlockFromSingle(single: Result) = BlockResult(List(single))
 
     val notImplSymbol = Ident(newTermName("$qmark$qmark$qmark"))
 
@@ -149,7 +150,7 @@ object ScalaCodeSheet {
         }
         case EmptyTree => Nil
         case expr => {
-            val result = if (expr.equalsStructure(notImplSymbol)) NotImplementedResult else evaluateWithSymbols(AST)
+            val result: ValueResult = if (expr.equalsStructure(notImplSymbol)) NotImplementedResult else evaluateWithSymbols(AST)
             List(ExpressionResult(final_ = result , line = AST.pos.line))
         }
       }
