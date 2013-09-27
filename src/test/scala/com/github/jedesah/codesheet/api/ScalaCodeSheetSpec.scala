@@ -996,11 +996,29 @@ class ScalaCodeSheetSpec extends Specification {
 			"abstract class" in {
 				"simple hierarchy" in {
 					val code = """abstract class Animal
-							| case class Cat(a: String) extends Animal
-							| case class Dog(b: Int) extends Animal
-							| def gogo(hui: Animal) = hui.toString""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "", "", """gogo(hui = Cat("foo")) => Cat(foo)""")
-				}
+								| case class Cat(a: String) extends Animal
+								| case class Dog(b: Int) extends Animal
+								| def gogo(hui: Animal) = hui.toString""".stripMargin
+					computeResults(code) must beLike{ case BlockResult(List(firstClassDefResult, secondClassDefResult, defDefResult)) =>
+						firstClassDefResult must beLike { case ClassDefResult("Cat", params, BlockResult(Nil), 2) =>
+							params must beLike { case List(a) =>
+								structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
+							}
+							
+						}
+						secondClassDefResult must beLike { case ClassDefResult("Dog", params, BlockResult(Nil), 3) =>
+							params must beLike { case List(b) =>
+								structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(3))))
+							}
+							
+						}
+						defDefResult must beLike{ case DefDefResult("gogo", params, None, rhs, 4) =>
+									params must beLike { case List(a) => 
+										structureEquals(a, AssignOrNamedArg(Ident(newTermName("hui")), Apply(Ident(newTermName("Cat")), List(Literal(Constant("foo")))))))
+									}
+									rhs === BlockResult( List(ExpressionResult("Cat(foo)", Nil, 4)))
+								}
+					}
 				"no concrete class" in {
 					"simple" in {
 						val code = """abstract class Animal
