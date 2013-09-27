@@ -107,6 +107,18 @@ object ScalaCodeSheet {
         oldInNewScope ++ newDefSymbols
       }
 
+      object StepTransformer extends Transformer {
+        override def transform(tree: Tree): Tree = tree match {
+          case ident: Ident => {
+            val result = evaluateWithSymbols(ident)
+            toolBox.parse(result.toString())
+          }
+          case _ => super.transform(tree)
+
+        }
+      }
+
+
       AST match {
         case ValDef(_, newTermName, _, assignee) => {
             val rhs = evaluate(assignee, toolBox, symbols)
@@ -151,7 +163,7 @@ object ScalaCodeSheet {
         case EmptyTree => Nil
         case expr => {
             val result: ValueResult = if (expr.equalsStructure(notImplSymbol)) NotImplementedResult else evaluateWithSymbols(AST)
-            List(ExpressionResult(final_ = result , line = AST.pos.line))
+            List(ExpressionResult(final_ = result , steps = List(StepTransformer.transform(expr)), line = AST.pos.line))
         }
       }
     }

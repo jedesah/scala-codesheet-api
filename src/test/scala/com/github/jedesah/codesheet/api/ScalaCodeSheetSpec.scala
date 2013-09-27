@@ -14,6 +14,8 @@ class ScalaCodeSheetSpec extends Specification {
 		if (first.equalsStructure(second)) ok
 		else first === second
 
+   val tb = cm.mkToolBox()
+
 
 	"ScalaCodeSheet" should {
 		"expressions" in {
@@ -21,7 +23,10 @@ class ScalaCodeSheetSpec extends Specification {
 				computeResults("1") ==== BlockResult(List(ExpressionResult(1, line = 1)))
 			}
 			"typical" in {
-				computeResults("1 + 1") ==== BlockResult(List(ExpressionResult(2, line = 1)))
+				computeResults("1 + 1") must beLike { case BlockResult(List(ExpressionResult(ObjectResult(2), List(step), 1))) =>
+          structureEquals(step, tb.parse("1 + 1"))
+        }
+
 			}
 			"two lines" in {
 				val code = """1 + 1
