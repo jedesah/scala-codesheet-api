@@ -7,6 +7,7 @@ import scala.tools.reflect.ToolBoxError
 import scala.reflect.runtime.universe.Flag._
 
 import com.github.jedesah.Math
+import com.github.jedesah.ScalaUtils._
 import com.github.jedesah.AugmentedCollections._
 
 object ScalaCodeSheet {
@@ -111,18 +112,18 @@ object ScalaCodeSheet {
         override def transform(tree: Tree): Tree = tree match {
           case ident: Ident => {
             val result = evaluateWithSymbols(ident)
-            toolBox.parse(result.toString())
+            val sourceString = toSource(result)
+            sourceString.map(toolBox.parse(_)) getOrElse ident
           }
           case _ => super.transform(tree)
-
         }
       }
 
 
       AST match {
-        case ValDef(_, newTermName, _, assignee) => {
-            val rhs = evaluate(assignee, toolBox, symbols)
-            List(ValDefResult(newTermName.toString, None, BlockResult(rhs), line = AST.pos.line))
+        case ValDef(_, name, _, rhs) => {
+            val rhsResult = evaluate(rhs, toolBox, symbols)
+            List(ValDefResult(name.toString, None, BlockResult(rhsResult), line = AST.pos.line))
         }
         // We fold over each child and all of it's preceding childs (inits) and evaluate
         // it with it's preceding children
@@ -163,7 +164,9 @@ object ScalaCodeSheet {
         case EmptyTree => Nil
         case expr => {
             val result: ValueResult = if (expr.equalsStructure(notImplSymbol)) NotImplementedResult else evaluateWithSymbols(AST)
-            List(ExpressionResult(final_ = result , steps = List(StepTransformer.transform(expr)), line = AST.pos.line))
+            val firstStep = StepTransformer.transform(expr)
+            val steps = if (firstStep.equalsStructure(expr)) Nil else List(firstStep)
+            List(ExpressionResult(final_ = result , steps = steps, line = AST.pos.line))
         }
       }
     }
