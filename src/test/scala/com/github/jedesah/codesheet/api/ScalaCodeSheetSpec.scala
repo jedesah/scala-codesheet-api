@@ -21,13 +21,10 @@ class ScalaCodeSheetSpec extends Specification {
 	"ScalaCodeSheet" should {
 		"expressions" in {
 			"literal" in {
-				computeResults("1") ==== BlockResult(List(ExpressionResult(1, line = 1)))
+				computeResults("1") ==== ExpressionResult(1, line = 1)
 			}
 			"typical" in {
-				computeResults("1 + 1") must beLike { case BlockResult(List(ExpressionResult(ObjectResult(2), List(step), 1))) =>
-          structureEquals(step, tb.parse("1 + 1"))
-        }
-
+				computeResults("1 + 1") ==== ExpressionResult(2, line = 1)
 			}
 			"two lines" in {
 				val code = """1 + 1
@@ -84,10 +81,13 @@ class ScalaCodeSheetSpec extends Specification {
 				computeResults(code) must beLike { case BlockResult(List(first, second)) =>
 					first === ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(4, line = 1))), line = 1)
 					second must beLike { case DefDefResult("tot", params, None, rhs, 2) =>
-						rhs === BlockResult(List(ExpressionResult("foofoo", Nil, 2)))
+						rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult("foofoo"), List(step), 2))) =>
+							structureEquals(step, tb.parse(""""foo" * 2"""))
+						}
 						params must beLike { case List(param) =>
 							structureEquals(param, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
 						}
+
 					}
 				}
 			}
