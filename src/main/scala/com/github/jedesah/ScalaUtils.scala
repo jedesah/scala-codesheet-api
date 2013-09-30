@@ -8,7 +8,7 @@ object ScalaUtils {
 	def toSource(a: Any): Option[String] =
 		a match {
 			case p: Product => {
-				val childs = p.productIterator.map(toSource)
+				val childs = p.productIterator.toList.map(toSource)
 				if (childs.contains(None)) None
 				else Some(childs.flatten mkString (p.productPrefix + "(", ", ", ")"))
 			}
