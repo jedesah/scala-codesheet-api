@@ -20,14 +20,14 @@ class ScalaCodeSheetResult extends Specification {
 				val result = BlockResult(List(
 					ExpressionResult("3", line = 1)
 				))
-				result.userRepr ==== "3"
+				result.userRepr ==== "\"3\""
 			}
 			"two" in {
 				val result = BlockResult(List(
 					ValDefResult("a", None, BlockResult(ExpressionResult("5", line = 1)), line = 1),
-					ExpressionResult("true", line = 2)
+					ExpressionResult(true, line = 2)
 				))
-				val expected = """a = 5
+				val expected = """a = "5"
 								 |true""".stripMargin
 				result.userRepr ==== expected
 			}
@@ -35,10 +35,10 @@ class ScalaCodeSheetResult extends Specification {
 				val result = BlockResult(List(
 					DefDefResult("perform", Nil, None, BlockResult(ExpressionResult("bar", line = 1)), line = 1),
 					ValDefResult("other", Some("Animal"), BlockResult(ExpressionResult("Dog(Maven)", line = 2)), line = 2),
-					ExpressionResult("1.5", line = 3)
+					ExpressionResult(1.5, line = 3)
 				))
-				val expected = """perform => bar
-								 |other: Animal = Dog(Maven)
+				val expected = """perform => "bar"
+								 |other: Animal = "Dog(Maven)"
 								 |1.5""".stripMargin
 				result.userRepr ==== expected
 			}
@@ -63,12 +63,12 @@ class ScalaCodeSheetResult extends Specification {
 		}
 		"ValDefResult" in {
 			"simple block" in {
-				val result = ValDefResult("a", None, BlockResult(ExpressionResult("5", line = 1)), line = 1)
+				val result = ValDefResult("a", None, BlockResult(ExpressionResult(5, line = 1)), line = 1)
 				result.userRepr === "a = 5"
 			}
 			"with inferred type" in {
 				val result = ValDefResult("a", Some("Animal"), BlockResult(ExpressionResult("Cat(5)", line = 1)), line = 1)
-				result.userRepr === "a: Animal = Cat(5)"
+				result.userRepr === "a: Animal = \"Cat(5)\""
 			}
 			"with complex block" in {
 				val result = ValDefResult("a", None, BlockResult(List(
@@ -76,8 +76,8 @@ class ScalaCodeSheetResult extends Specification {
 					ExpressionResult("Cat(6)", line = 3)
 				)), line = 1)
 				val expected = """a = {
-								 |	cc = Cat(4)
-								 |	Cat(6)
+								 |	cc = "Cat(4)"
+								 |	"Cat(6)"
 								 |}""".stripMargin
 				result.userRepr ==== expected
 			}
@@ -89,7 +89,7 @@ class ScalaCodeSheetResult extends Specification {
 		}
 		"DefDefResult" in {
 			"simple block" in {
-				val result = DefDefResult("perform", Nil, None, BlockResult(ExpressionResult("5", line = 1)), line = 1)
+				val result = DefDefResult("perform", Nil, None, BlockResult(ExpressionResult(5, line = 1)), line = 1)
 				result.userRepr === "perform => 5"
 			}
 			"with params" in {
@@ -97,7 +97,7 @@ class ScalaCodeSheetResult extends Specification {
 					AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))),
 					AssignOrNamedArg(Ident(newTermName("tui")), Literal(Constant(true)))
 				)
-				val result = DefDefResult("perform", params, None, BlockResult(ExpressionResult("5", line = 1)), line = 1)
+				val result = DefDefResult("perform", params, None, BlockResult(ExpressionResult(5, line = 1)), line = 1)
 				result.userRepr === "perform(a = 5, tui = true) => 5"
 			}
 			"with inferred type" in {
@@ -110,8 +110,8 @@ class ScalaCodeSheetResult extends Specification {
 					ExpressionResult("Cat(6)", line = 3)
 				)), line = 1)
 				val expected = """perform => {
-								 |	cc = Cat(4)
-								 |	Cat(6)
+								 |	cc = "Cat(4)"
+								 |	"Cat(6)"
 								 |}""".stripMargin
 				result.userRepr ==== expected
 			}
@@ -128,6 +128,18 @@ class ScalaCodeSheetResult extends Specification {
 			"Unit" in {
 				val result = ExpressionResult(Unit, line = 1)
 				result.userRepr === ""
+			}
+			"case class" in {
+				"one param" in {
+					case class Cat(name: String)
+					val result = ExpressionResult(final_ = Cat("Jack"), line = 1)
+					result.userRepr === "Cat(\"Jack\")"
+				}
+				"two params" in {
+					case class Cat(age: Int, name: String)
+					val result = ExpressionResult(final_ = Cat(12, "Jack"), line = 1)
+					result.userRepr === "Cat(12, \"Jack\")"
+				}
 			}
 		}
 		"ExceptionResult" in {
