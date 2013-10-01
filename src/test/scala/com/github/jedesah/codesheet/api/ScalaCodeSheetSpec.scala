@@ -15,7 +15,7 @@ class ScalaCodeSheetSpec extends Specification {
 		if (first.equalsStructure(second)) ok
 		else first === second
 
-   val tb = cm.mkToolBox()
+	val tb = cm.mkToolBox()
 
 
 	"ScalaCodeSheet" should {
@@ -35,7 +35,7 @@ class ScalaCodeSheetSpec extends Specification {
 				val code = """1 + 1
 					|
 					| 4 * 4""".stripMargin
-				var expected = BlockResult(List(
+				val expected = BlockResult(List(
 					ExpressionResult(2, line = 1),
 					ExpressionResult(16, line = 3)
 				))
@@ -52,6 +52,9 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 			"empty" in {
 				computeResults("") ==== BlockResult(Nil)
+			}
+			"string interpolation" in {
+				computeResults("""s"allo"""") ==== ExpressionResult("allo", line = 1)
 			}
 		}
 
@@ -87,7 +90,6 @@ class ScalaCodeSheetSpec extends Specification {
 						params must beLike { case List(param) =>
 							structureEquals(param, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
 						}
-
 					}
 				}
 			}
@@ -109,10 +111,12 @@ class ScalaCodeSheetSpec extends Specification {
 						}
 					}
 					"String" in {
-						val code = """def addExclamation(a: String, b: String, c: String) = s"$a! $b! $c!" """
+						val code = "def addExclamation(a: String, b: String, c: String) = a + b * 2 + c"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("addExclamation", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult("foo! bar! biz!", Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult("foobarbarbiz"), List(step), 1))) =>
+									structureEquals(step, tb.parse(""""foo" + "bar" * 2 + "biz""""))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("bar"))))
@@ -195,7 +199,7 @@ class ScalaCodeSheetSpec extends Specification {
 									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(7))))
 								}
 							}
-						}						
+						}
 					}
 					"Short" in {
 						val code = "def foo(a: Short, b: Short, c: Short) = a + b - c"
@@ -213,17 +217,20 @@ class ScalaCodeSheetSpec extends Specification {
 						}
 					}
 					"Char" in {
-						val code = """def addExclamation(a: Char, b: Char, c: Char) = s"$a! $b! $c!" """
+						val code = "def addExclamation(a: Char, b: Char, c: Char) = a + b + c"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("addExclamation", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult("a! b! c!", Nil, 1)))
+								val result = 'a' + 'b' + 'c'
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(result), List(step), 1))) =>
+									structureEquals(step, tb.parse("'a' + 'b' + 'c'"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant('a'))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant('b'))))
 									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant('c'))))
 								}
 							}
-						}						
+						}
 					}
 					"AnyVal" in {
 						val code = """def foo(a: AnyVal, b: AnyVal, c: AnyVal) = s"$a! $b! $c!" """
@@ -236,7 +243,7 @@ class ScalaCodeSheetSpec extends Specification {
 									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Literal(Constant(true))))
 								}
 							}
-						}	
+						}
 					}
 					"Any" in {
 						val code = """def foo(a: Any, b: Any, c: Any) = s"$a! $b! $c!" """
@@ -277,7 +284,7 @@ class ScalaCodeSheetSpec extends Specification {
 									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(11))))))
 								}
 							}
-						}						
+						}
 					}
 					"Option" in {
 						val code = "def foo(a: Option[String], b: Option[String], c: Option[String]) = if(c.isEmpty) b else a"
@@ -322,7 +329,7 @@ class ScalaCodeSheetSpec extends Specification {
 									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(true))))))
 								}
 							}
-						}						
+						}
 					}
 				}
 				"custom class" in {
@@ -385,7 +392,7 @@ class ScalaCodeSheetSpec extends Specification {
 											structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
 											structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
 										}
-									} 								 
+									}
 									third must beLike { case DefDefResult("isMatch", params, None, rhs, 3) =>
 										rhs === BlockResult(List(ExpressionResult(3, Nil, 3)))
 										params must beLike { case List(a) =>
@@ -410,7 +417,7 @@ class ScalaCodeSheetSpec extends Specification {
 											structureEquals(a, AssignOrNamedArg(Ident(newTermName("name")), Literal(Constant("foo"))))
 											structureEquals(b, AssignOrNamedArg(Ident(newTermName("age")), Literal(Constant(3))))
 										}
-									} 								 
+									}
 									third must beLike { case DefDefResult("isMatch", params, None, rhs, 3) =>
 										rhs === BlockResult(List(ExpressionResult("foo", Nil, 3)))
 										params must beLike { case List(a) =>
@@ -445,7 +452,7 @@ class ScalaCodeSheetSpec extends Specification {
 												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
 												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
 											}
-										} 																	 
+										}
 										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
 											rhs === BlockResult(List(ExpressionResult("bar", Nil, 4)))
 											params must beLike { case List(a) =>
@@ -477,7 +484,7 @@ class ScalaCodeSheetSpec extends Specification {
 												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
 												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
 											}
-										} 																	 
+										}
 										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
 											rhs === BlockResult(List(ExpressionResult("foo", Nil, 4)))
 											params must beLike { case List(a) =>
@@ -509,7 +516,7 @@ class ScalaCodeSheetSpec extends Specification {
 												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
 												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
 											}
-										} 																	 
+										}
 										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
 											rhs === BlockResult(List(ExpressionResult(3, Nil, 4)))
 											params must beLike { case List(a) =>
@@ -542,7 +549,7 @@ class ScalaCodeSheetSpec extends Specification {
 												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
 												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
 											}
-										} 																	 
+										}
 										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
 											rhs === BlockResult(List(ExpressionResult(false, Nil, 4)))
 											params must beLike { case List(a,b) =>
@@ -577,7 +584,7 @@ class ScalaCodeSheetSpec extends Specification {
 												structureEquals(a, AssignOrNamedArg(Ident(newTermName("text")), Literal(Constant("foo"))))
 												structureEquals(b, AssignOrNamedArg(Ident(newTermName("author")), Literal(Constant("bar"))))
 											}
-									} 																	 
+									}
 										fourth must beLike { case DefDefResult("isMatch", params, None, rhs, 4) =>
 											rhs === BlockResult(List(ExpressionResult(false, Nil, 4)))
 											params must beLike { case List(a,b) =>
@@ -611,7 +618,7 @@ class ScalaCodeSheetSpec extends Specification {
 											structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Select(New(Ident(newTypeName("Car"))), nme.CONSTRUCTOR), List(Literal(Constant(3)), Literal(Constant("foo"))))))
 										}
 									}
-								}	
+								}
 						}
 						"three" in {
 							val code = """class Car(val year: Int, val model: String)
@@ -636,7 +643,7 @@ class ScalaCodeSheetSpec extends Specification {
 											structureEquals(a, AssignOrNamedArg(Ident(newTermName("calorie")), Literal(Constant(3))))
 											structureEquals(b, AssignOrNamedArg(Ident(newTermName("heat")), Literal(Constant(5))))
 										}
-									} 																
+									}
 									fourth must beLike { case DefDefResult("foo", params, None, rhs, 4) =>
 										rhs === BlockResult(List(ExpressionResult("foo-3", Nil, 4)))
 										params must beLike { case List(a, b, c) =>
@@ -724,7 +731,7 @@ class ScalaCodeSheetSpec extends Specification {
 									structureEquals(e, AssignOrNamedArg(Ident(newTermName("e")), Literal(Constant(false))))
 								}
 							}
-						}									
+						}
 					}
 					"multiple inner value definition" in {
 						val code = """def foo(a: List[Int], b: Int) = {
@@ -739,17 +746,17 @@ class ScalaCodeSheetSpec extends Specification {
 								structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(11))))
 							}
 							rhs === BlockResult(List(
-										ValDefResult("temp", None, rhs = BlockResult(List(ExpressionResult(List(3, 5, 7), line = 2))), line = 2),
-										ValDefResult("almostDone", None, rhs = BlockResult(List(ExpressionResult(List(11, 3, 5, 7), line = 3))), line = 3),
-										ExpressionResult(List(11, 3, 5), Nil, 4)	
+								ValDefResult("temp", None, rhs = BlockResult(List(ExpressionResult(List(3, 5, 7), line = 2))), line = 2),
+								ValDefResult("almostDone", None, rhs = BlockResult(List(ExpressionResult(List(11, 3, 5, 7), line = 3))), line = 3),
+								ExpressionResult(List(11, 3, 5), Nil, 4)
 							))
-							}										
+							}
 						}
 					}
 				}
-			}	
+			}
 		}
-		
+
 		"value definition" in {
 			"simple" in {
 				val code = "val a = 34"
@@ -769,7 +776,7 @@ class ScalaCodeSheetSpec extends Specification {
 				computeResults(code) must beLike { case BlockResult(List(first, second)) =>
 					first === ValDefResult("a", None, rhs = BlockResult(List(ExpressionResult(34, line = 1))), line = 1)
 					second === ExpressionResult(44, Nil, 2)
-				}						
+				}
 			}
 			"value is function application" in {
 				val code = """def perform(a: Int) = a + 5
@@ -811,7 +818,7 @@ class ScalaCodeSheetSpec extends Specification {
 						rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(obj), Nil, 2))) =>
 							obj.toString === "Car(Fiat,1999)"
 				 		} 
-					}					
+					}
 				}
 			}
 			"with use" in {
@@ -832,7 +839,7 @@ class ScalaCodeSheetSpec extends Specification {
 				 		} 
 					}
 					expression1 === ExpressionResult("Fiat", Nil, 3)
-					expression2 === ExpressionResult(1999, Nil, 4)					
+					expression2 === ExpressionResult(1999, Nil, 4)
 				}
 			}
 			"complex" in {
@@ -906,7 +913,7 @@ class ScalaCodeSheetSpec extends Specification {
 						 			ValDefResult("b", None, BlockResult(List(ExpressionResult("8foo", Nil, 3))), 3))) 
 							}
 						}
-					}	
+					}
 				"5" in {
 					val code = """case class Car(model: String, year: Int) {
 								|	val aabb = List(1,2,4,5).take(2)
@@ -926,7 +933,7 @@ class ScalaCodeSheetSpec extends Specification {
 								 		}
 										body === BlockResult(List(ExpressionResult(Nil, Nil, 3)))
 						 			}
-						 		} 						 			
+						 		}
 							}
 						}
 				}
@@ -1068,16 +1075,13 @@ class ScalaCodeSheetSpec extends Specification {
 									
 								}
 							}
-									
 						}
-						
 						"two value definitions" in {
 							val code = """abstract class Animal {
 										|	val y: Int
 										|	val z: String
 										| }
 										| def gogogi(yui: Animal) = yui.z + (yui.y + 45)""".stripMargin
-
 							computeResults(code) must beLike { case BlockResult(List(gogogi)) =>
 								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 5) =>
 									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")),
@@ -1086,7 +1090,6 @@ class ScalaCodeSheetSpec extends Specification {
 								}
 							}
 						}
-						
 						"one function definition" in {
 							val code = """abstract class Animal {
 										|	def y(a: Int): Int
@@ -1100,34 +1103,51 @@ class ScalaCodeSheetSpec extends Specification {
 								}
 							}
 						}
-						/*
 						"two function definitions" in {
 							val code = """abstract class Animal {
 										|	def y(a: Int): Int
 										|	def z(b: Char): Boolean
 										| }
 										| def gogogi(yui: Animal) = if (yui.z('a')) yui.y(3) else 7""".stripMargin
-							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3; def z(b: Char) = true }) => 3")
-							ScalaCodeSheet.computeResults(code) ==== expected
+							computeResults(code) must beLike { case BlockResult(List(gogogi)) =>
+								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 5) =>
+									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")), tb.parse("new Animal { def y(a: Int) = 3; def z(b: Char) = true }")))
+									expr ==== ExpressionResult(3, Nil, 5)
+								}
+							}
 						}
 					}
-					*/
 				}
 			}
-			/*
 			"trait" in {
 				"simple hierarchy" in {
 					val code = """trait Animal
 								| case class Cat(a: Int) extends Animal
 								| case class Dog(b: Boolean) extends Animal
 								| def tti(bb: Animal) = bb.toString""".stripMargin
-					ScalaCodeSheet.computeResults(code) ==== List("", "", "", "tti(bb = Cat(3)) => Cat(3)")
+					computeResults(code) must beLike { case BlockResult(List(cat, dog, tti)) =>
+						cat must beLike { case ClassDefResult("Cat", List(a), BlockResult(Nil), 2) =>
+							structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+						}
+						dog must beLike { case ClassDefResult("Dog", List(b), BlockResult(Nil), 3) =>
+							structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(true))))
+						}
+						tti must beLike { case DefDefResult("tti", List(bb), None, expr, 4) =>
+							structureEquals(bb, AssignOrNamedArg(Ident(newTermName("bb")), tb.parse("Cat(3)")))
+							expr ==== ExpressionResult("Cat(3)", Nil, 4)
+						}
+					}
 				}
 				"no concrete class" in {
 					"simple" in {
 						val code = """trait Animal
 									| def tto(bb: Animal) = 5 + 4""".stripMargin
-						ScalaCodeSheet.computeResults(code) ==== List("", "tto(bb = new Animal {}) => 9")
+						computeResults(code) must beLike { case BlockResult(List(tto)) =>
+							tto must beLike { case DefDefResult("tto", List(bb), None, expr, 2) =>
+								structureEquals(bb, AssignOrNamedArg(Ident(newTermName("bb")), tb.parse("new Animal {}")))
+								expr ==== ExpressionResult(9, Nil, 2)
+							}
+						}
 					}
 					"with abstract members" in {
 						"one value definition" in {
@@ -1135,7 +1155,12 @@ class ScalaCodeSheetSpec extends Specification {
 										|	val y: Int
 										| }
 										| def gogogi(yui: Animal) = yui.y + 45""".stripMargin
-							ScalaCodeSheet.computeResults(code) ==== List("", "", "", "gogogi(yui = new Animal { val y = 3 }) => 48")
+							computeResults(code) must beLike { case BlockResult(List(gogogi)) =>
+								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 4) =>
+									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")), tb.parse("new Animal { val y = 3}")))
+									expr ==== ExpressionResult(48, Nil, 4)
+								}
+							}
 						}
 						"two value definitions" in {
 							val code = """trait Animal {
@@ -1143,16 +1168,24 @@ class ScalaCodeSheetSpec extends Specification {
 										|	val z: String
 										| }
 										| def gogogi(yui: Animal) = yui.z + (yui.y + 45)""".stripMargin
-							val expected = List("", "", "", "", """gogogi(yui = new Animal { val y = 3; val z = "foo" }) => foo48""")
-							ScalaCodeSheet.computeResults(code) ==== expected
+							computeResults(code) must beLike { case BlockResult(List(gogogi)) =>
+								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 5) =>
+									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")), tb.parse("""new Animal { val y = 3; val z = "foo"}""")))
+									expr ==== ExpressionResult("foo48", Nil, 5)
+								}
+							}
 						}
 						"one function definition" in {
 							val code = """trait Animal {
 										|	def y(a: Int): Int
 										| }
 										| def gogogi(yui: Animal) = yui.y(3)""".stripMargin
-							val expected = List("", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3 }) => 3")
-							ScalaCodeSheet.computeResults(code) ==== expected
+							computeResults(code) must beLike { case BlockResult(List(gogogi)) =>
+								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 4) =>
+									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")), tb.parse("new Animal { defy(a: Int) = 3}")))
+									expr ==== ExpressionResult(3, Nil, 4)
+								}
+							}
 						}
 						"two function definitions" in {
 							val code = """trait Animal {
@@ -1160,11 +1193,15 @@ class ScalaCodeSheetSpec extends Specification {
 										|	def z(b: Char): Boolean
 										| }
 										| def gogogi(yui: Animal) = if (yui.z('a')) yui.y(3) else 7""".stripMargin
-							val expected = List("", "", "", "", "gogogi(yui = new Animal { def y(a: Int) = 3; def z(b: Char) = true }) => 3")
-							ScalaCodeSheet.computeResults(code) ==== expected
+							computeResults(code) must beLike { case BlockResult(List(gogogi)) =>
+								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 5) =>
+									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")), tb.parse("new Animal { def y(a: Int) = 3; def z(b: Char) = true }")))
+									expr ==== ExpressionResult(3, Nil, 5)
+								}
+							}
 						}
 					}
-				}*/
+				}
 			}
 		}
 		"???" in {
@@ -1195,13 +1232,13 @@ class ScalaCodeSheetSpec extends Specification {
 		"import" in {
 			"simple" in {
 				val code = """import scala.util.Random
-							| if (Random.nextBoolean) 10 else 10""".stripMargin
+				             |if (Random.nextBoolean) 10 else 10""".stripMargin
 				computeResults(code) ==== ExpressionResult(10, Nil, 2)
 			}
 			"relative" in {
 				val code = """import scala._
-							| import util.Random
-							| if (Random.nextBoolean) 10 else 10""".stripMargin
+				             |import util.Random
+				             |if (Random.nextBoolean) 10 else 10""".stripMargin
 				computeResults(code) ==== ExpressionResult(10, Nil, 3)
 			}
 		}
