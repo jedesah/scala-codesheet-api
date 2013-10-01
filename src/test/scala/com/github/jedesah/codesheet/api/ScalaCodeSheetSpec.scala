@@ -97,7 +97,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Int, b: Int, c: Int) = a + b - c"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(1, Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(1), List(step), 1))) =>
+									structureEquals(step, tb.parse("3 + 5 - 7"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))	
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))))
@@ -123,7 +125,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Float, b: Float, c: Float) = a + b - c"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(-0.5, Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(-0.5), List(step), 1))) =>
+									structureEquals(step, tb.parse("1.5 + 2.5 - 4.5"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(1.5f))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(2.5f))))
@@ -136,7 +140,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Boolean, b: Boolean, c: Boolean) = a && b || c"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(true, Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(true), List(step), 1))) =>
+									structureEquals(step, tb.parse("true && false || true"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(true))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(false))))
@@ -149,7 +155,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Long, b: Long, c: Long) = a + b - c"
 						computeResults(code) must beLike { case BlockResult(List(first)) => {
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(1, Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(1), List(step), 1))) =>
+									structureEquals(step, tb.parse("3 + 5 - 7"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))))
@@ -163,7 +171,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Double, b: Double, c: Double) = a + b - c"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(-0.5, Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(-0.5), List(step), 1))) =>
+									structureEquals(step, tb.parse("1.5 + 2.5 - 4.5"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(1.5))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(2.5))))
@@ -176,7 +186,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Byte, b: Byte, c: Byte) = a + b - c"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(1, Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(1), List(step), 1))) =>
+									structureEquals(step, tb.parse("3 + 5 - 7"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))))
@@ -189,7 +201,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Short, b: Short, c: Short) = a + b - c"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(1, Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(1), List(step), 1))) =>
+									structureEquals(step, tb.parse("3 + 5 - 7"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant(5))))
@@ -254,7 +268,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: List[Int], b: List[Int], c: List[Int]) = if (c.isEmpty) a.length else b.length"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(0, Nil, 1)))
+								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult(0), List(step), 1))) =>
+									structureEquals(step, tb.parse("if (List(11).isEmpty) List(3, 5, 7).length else List().length"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))))
@@ -267,7 +283,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Option[String], b: Option[String], c: Option[String]) = if(c.isEmpty) b else a"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(Some("foo"), Nil, 1)))
+								rhs must beLike{ case BlockResult(List(ExpressionResult(ObjectResult(Some("foo")), List(step), 1))) =>
+								structureEquals(step, tb.parse("""if(List("Some","bar").isEmpty) List() else List("Some","foo")"""))
+							}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Some")), List(Literal(Constant("foo"))))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("None"))))
@@ -280,7 +298,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: Seq[Boolean], b: Seq[Boolean], c: Seq[Boolean]) = if (c.isEmpty) a.length else b.take(1)"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(List(), Nil, 1)))
+								rhs must beLike{ case BlockResult(List(ExpressionResult(ObjectResult(List()), List(step), 1))) =>
+									structureEquals(step, tb.parse("if (List(false).nonEmpty) List(true, false, true).length else List().take(1)"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("Seq")), List(Literal(Constant(true)), Literal(Constant(false)), Literal(Constant(true))))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))))
@@ -293,7 +313,9 @@ class ScalaCodeSheetSpec extends Specification {
 						val code = "def foo(a: List[_], b: List[_], c: List[_]) = if (c.nonEmpty) a else b"
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult(List(3, 5, 7), Nil, 1)))
+								rhs must beLike{ case BlockResult(List(ExpressionResult(ObjectResult(List(3, 5, 7)), List(step), 1))) =>
+									structureEquals(step, tb.parse("if (List(true).nonEmpty) List(3, 5, 7) else List()"))
+								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))))
