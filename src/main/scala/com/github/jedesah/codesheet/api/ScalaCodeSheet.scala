@@ -67,7 +67,7 @@ object ScalaCodeSheet {
     case class ObjectResult(value: Any) extends ValueResult {
         def userRepr = value match {
             case _: scala.runtime.BoxedUnit | scala.Unit => ""
-            case _ => value.toString
+            case _ => toSource(value) getOrElse value.toString
         }
     }
     implicit def createObjectResult(value: Any) = ObjectResult(value)
@@ -109,6 +109,10 @@ object ScalaCodeSheet {
       }
 
       object StepTransformer extends Transformer {
+        def firstStep(tree: Tree): Tree = tree match {
+          case _: Ident => tree
+          case _ => transform(tree)
+        }
         override def transform(tree: Tree): Tree = tree match {
           case ident: Ident => {
             val result = evaluateWithSymbols(ident)
@@ -164,7 +168,7 @@ object ScalaCodeSheet {
         case EmptyTree => Nil
         case expr => {
             val result: ValueResult = if (expr.equalsStructure(notImplSymbol)) NotImplementedResult else evaluateWithSymbols(AST)
-            val firstStep = StepTransformer.transform(expr)
+            val firstStep = StepTransformer.firstStep(expr)
             val steps = if (firstStep.equalsStructure(expr)) Nil else List(firstStep)
             List(ExpressionResult(final_ = result , steps = steps, line = AST.pos.line))
         }

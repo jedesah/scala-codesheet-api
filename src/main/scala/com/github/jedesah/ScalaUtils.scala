@@ -8,16 +8,22 @@ object ScalaUtils {
 	def toSource(a: Any): Option[String] =
 		a match {
 			case p: Product => {
-				val childs = p.productIterator.map(toSource)
+				val childs = p.productIterator.toList.map(toSource)
 				if (childs.contains(None)) None
 				else Some(childs.flatten mkString (p.productPrefix + "(", ", ", ")"))
 			}
 			case s: String => Some(toSource(s))
-			case other =>
-				if (testAnyVal(other)) Some(toSource(other.asInstanceOf[AnyVal]))
-				else None
+			case 
+				  _ : Unit 
+				| _ : Boolean 
+				| _ : Byte
+				| _ : Char 
+				| _ : Short 
+				| _ : Int
+				| _ : Long
+				| _ : Float
+				| _ : Double
+				| _ : AnyRef => Some(a.toString)
+			case other => None
 		} 
-
-	def testAnyVal[T](x: T)(implicit evidence: T <:< AnyVal = null) = evidence != null
-
 }
