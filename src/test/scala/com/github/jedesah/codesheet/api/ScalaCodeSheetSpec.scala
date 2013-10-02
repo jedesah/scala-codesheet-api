@@ -17,7 +17,6 @@ class ScalaCodeSheetSpec extends Specification {
 
 	val tb = cm.mkToolBox()
 
-
 	"ScalaCodeSheet" should {
 		"expressions" in {
 			"literal" in {
@@ -54,7 +53,12 @@ class ScalaCodeSheetSpec extends Specification {
 				computeResults("") ==== BlockResult(Nil)
 			}
 			"string interpolation" in {
-				computeResults("""s"allo"""") ==== ExpressionResult("allo", line = 1)
+				"steps" in {
+					computeResults("""s"allo"""") ==== ExpressionResult("allo", line = 1)
+				}
+				"no steps" in {
+					computeResults("""s"allo"""", enableSteps = false) ==== ExpressionResult("allo", line = 1)
+				}
 			}
 		}
 

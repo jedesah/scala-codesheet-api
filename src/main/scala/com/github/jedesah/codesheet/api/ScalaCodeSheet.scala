@@ -75,7 +75,7 @@ object ScalaCodeSheet {
 
     val notImplSymbol = Ident(newTermName("$qmark$qmark$qmark"))
 
-    def evaluate(AST: Tree, toolBox: ToolBox[reflect.runtime.universe.type], symbols: List[DefTree] = Nil): List[Result] = {
+    def evaluate(AST: Tree, toolBox: ToolBox[reflect.runtime.universe.type], symbols: List[DefTree] = Nil, enableSteps: Boolean = true): List[Result] = {
       lazy val classDefs: Traversable[ClassDef] = symbols.collect{ case elem: ClassDef => elem }
 
       def evaluateWithSymbols(expr: Tree, extraSymbols: Traversable[Tree] = Set()) = {
@@ -168,17 +168,17 @@ object ScalaCodeSheet {
         case EmptyTree => Nil
         case expr => {
             val result: ValueResult = if (expr.equalsStructure(notImplSymbol)) NotImplementedResult else evaluateWithSymbols(AST)
-            val firstStep = StepTransformer.firstStep(expr)
-            val steps = if (firstStep.equalsStructure(expr)) Nil else List(firstStep)
+            lazy val firstStep = StepTransformer.firstStep(expr)
+            val steps = if (!enableSteps || firstStep.equalsStructure(expr)) Nil else List(firstStep)
             List(ExpressionResult(final_ = result , steps = steps, line = AST.pos.line))
         }
       }
     }
 
-    def computeResults(code: String): BlockResult = try {
+    def computeResults(code: String, enableSteps: Boolean = true): BlockResult = try {
         val toolBox = cm.mkToolBox()
         val AST = toolBox.parse(code)
-        BlockResult(evaluate(AST, toolBox))
+        BlockResult(evaluate(AST, toolBox, enableSteps = enableSteps))
     } catch {
       case ToolBoxError(msg, cause) => {
         val userMessage = msg.dropWhile(_ != ':').drop(2).dropWhile(char => char == ' ' || char == '\n' || char == '\t')
