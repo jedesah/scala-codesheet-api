@@ -237,10 +237,10 @@ class ScalaCodeSheetSpec extends Specification {
 						}
 					}
 					"AnyVal" in {
-						val code = """def foo(a: AnyVal, b: AnyVal, c: AnyVal) = s"$a! $b! $c!" """
-						computeResults(code) must beLike { case BlockResult(List(first)) =>
-							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs === BlockResult(List(ExpressionResult("3! f! true!", Nil, 1)))
+						val code = "def foo(a: AnyVal, b: AnyVal, c: AnyVal) = List(a,b,c)"
+						computeResults(code, enableSteps = false) must beLike { case BlockResult(List(foo)) =>
+							foo must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+								rhs ==== ExpressionResult(List(3, 'f', true), Nil, 1)
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
 									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant('f'))))
