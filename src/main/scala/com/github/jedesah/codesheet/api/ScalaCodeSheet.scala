@@ -32,7 +32,7 @@ object ScalaCodeSheet {
     }
     abstract class Result(val line: Int) {
         def userRepr: String
-        protected def userRepr(params: List[AssignOrNamedArg]) = if (params.length == 0) "" else "(" + params.mkString(", ") + ")"
+        protected def userRepr(params: List[AssignOrNamedArg]) = params.mkStringNoEndsIfEmpty("(", ", ", ")")
     }
     case class ValDefResult(name: String, inferredType: Option[String], rhs: BlockResult, override val line: Int) extends Result(line) {
         def userRepr = name + inferredType.map(": " + _).getOrElse("") + " =" + rhs.wrappedUserRepr(line)
