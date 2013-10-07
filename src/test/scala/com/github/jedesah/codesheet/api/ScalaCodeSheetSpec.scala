@@ -944,21 +944,43 @@ class ScalaCodeSheetSpec extends Specification {
 					val code = """abstract class Pug {
 								|	val a: Int
 								| }""".stripMargin
-					computeResults(code, enableSteps = false) ==== BlockResult(Nil)
+          computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef)) =>
+            classDef ==== ClassDefResult("Pug", Nil, BlockResult(Nil),1)
+          }
 				}
 				"one function definition" in {
 					val code = """abstract class Pet {
 								|	def af(g: Int): Boolean
 								| }""".stripMargin
-					computeResults(code, enableSteps = false) ==== BlockResult(Nil)
+          computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef)) =>
+            classDef ==== ClassDefResult("Pet", Nil, BlockResult(Nil),1)
+          }
 				}
 				"one function definition followed by evaluated expression" in {
 					val code = """abstract class Pet {
 								|	def af(g: Int): Boolean
 								| }
 								| val a = 5 + 5""".stripMargin
-					computeResults(code, enableSteps = false) ==== BlockResult(List(ValDefResult("a", None, BlockResult(List(ExpressionResult(10, Nil, 4))), 4)))
+					computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef, valDef)) =>
+            classDef ==== ClassDefResult("Pet", Nil, BlockResult(Nil),1)
+            valDef ==== ValDefResult("a", None, BlockResult(List(ExpressionResult(10, Nil, 4))), 4)
+          }
 				}
+        "with concrete members" in {
+          val code = """abstract class Car(model: String, year: Int) {
+                       |  val a: Int
+                       |  def b = a + model + year
+                       |}""".stripMargin
+          computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef)) =>
+            classDef must beLike {case ClassDefResult("Car", params, BlockResult(List(b)),1) =>
+              params must beLike { case List(a, b) =>
+                structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+                structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+              }
+              b === DefDefResult("b", Nil, None, ExpressionResult("3foo3", Nil, line = 3), 3)
+            }
+          }
+        }
 			}
 		}
 		"object definition" in {
@@ -1035,7 +1057,8 @@ class ScalaCodeSheetSpec extends Specification {
 							| case class Cat(a: String) extends Animal
 							| case class Dog(b: Int) extends Animal
 							| def gogo(hui: Animal) = hui.toString""".stripMargin
-					computeResults(code, enableSteps = false) must beLike { case BlockResult(List(cat, dog, gogo)) =>
+					computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef, cat, dog, gogo)) =>
+            classDef ==== ClassDefResult("Animal", Nil, BlockResult(Nil),1)
 						cat must beLike { case ClassDefResult("Cat", List(a), BlockResult(Nil), 2) =>
 							structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
 						}
@@ -1053,7 +1076,8 @@ class ScalaCodeSheetSpec extends Specification {
 					"simple" in {
 						val code = """abstract class Animal
 									| def gogogo(lui: Animal) = 5 + 5""".stripMargin
-						computeResults(code, enableSteps = false) must beLike { case BlockResult(List(gogogo)) =>
+						computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef, gogogo)) =>
+              classDef ==== ClassDefResult("Animal", Nil, BlockResult(Nil),1)
 							gogogo must beLike { case DefDefResult("gogogo", List(hui), None, expr, 2) =>
 								structureEquals(hui, AssignOrNamedArg(Ident(newTermName("lui")),
 									Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName("Animal"))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(())))))))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), List()))
@@ -1069,7 +1093,8 @@ class ScalaCodeSheetSpec extends Specification {
 										| }
 										| def gogogi(yui: Animal) = yui.y + 45""".stripMargin
 
-							computeResults(code, enableSteps = false) must beLike { case BlockResult(List(gogogi)) =>
+							computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef, gogogi)) =>
+                classDef ==== ClassDefResult("Animal", Nil, BlockResult(Nil),1)
 								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 4) =>
 									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")),
 										Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName("Animal"))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(())))), ValDef(Modifiers(), newTermName("y"), TypeTree(), Literal(Constant(3))))))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), List()))))
@@ -1084,7 +1109,8 @@ class ScalaCodeSheetSpec extends Specification {
 										|	val z: String
 										| }
 										| def gogogi(yui: Animal) = yui.z + (yui.y + 45)""".stripMargin
-							computeResults(code, enableSteps = false) must beLike { case BlockResult(List(gogogi)) =>
+							computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef, gogogi)) =>
+                classDef ==== ClassDefResult("Animal", Nil, BlockResult(Nil),1)
 								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 5) =>
 									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")),
 										Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName("Animal"))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(())))), ValDef(Modifiers(), newTermName("y"), TypeTree(), Literal(Constant(3))), ValDef(Modifiers(), newTermName("z"), TypeTree(), Literal(Constant("foo"))))))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), List()))))
@@ -1097,7 +1123,8 @@ class ScalaCodeSheetSpec extends Specification {
 										|	def y(a: Int): Int
 										| }
 										| def gogogi(yui: Animal) = yui.y(3)""".stripMargin
-							computeResults(code, enableSteps = false) must beLike { case BlockResult(List(gogogi)) =>
+							computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef, gogogi)) =>
+                classDef ==== ClassDefResult("Animal", Nil, BlockResult(Nil),1)
 								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 4) =>
 									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")),
 										Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName("Animal"))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(())))), DefDef(Modifiers(), newTermName("y"), List(), List(List(ValDef(Modifiers(PARAM), newTermName("a"), Ident(newTypeName("Int")), EmptyTree))), TypeTree(), Literal(Constant(3))))))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), List()))))
@@ -1111,7 +1138,8 @@ class ScalaCodeSheetSpec extends Specification {
 										|	def z(b: Char): Boolean
 										| }
 										| def gogogi(yui: Animal) = if (yui.z('a')) yui.y(3) else 7""".stripMargin
-							computeResults(code, enableSteps = false) must beLike { case BlockResult(List(gogogi)) =>
+							computeResults(code, enableSteps = false) must beLike { case BlockResult(List(classDef, gogogi)) =>
+                classDef ==== ClassDefResult("Animal", Nil, BlockResult(Nil),1)
 								gogogi must beLike { case DefDefResult("gogogi", List(yui), None, expr, 5) =>
 									structureEquals(yui, AssignOrNamedArg(Ident(newTermName("yui")), tb.parse("new Animal { def y(a: Int) = 3; def z(b: Char) = true }")))
 									expr ==== ExpressionResult(3, Nil, 5)
