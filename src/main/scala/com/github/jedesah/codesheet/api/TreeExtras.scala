@@ -32,10 +32,13 @@ package object api {
 	    }
 	}
 
+  implicit class AugmentedMemberDef(memberDef: MemberDef) {
+    val isAbstract = memberDef.mods.hasFlag(ABSTRACT)
+  }
+
 	implicit class AugmentedClassDef(classDef: ClassDef) {
 		val constructorOption = classDef.impl.body.find(isConstructor).asInstanceOf[Option[DefDef]]
 		val isCaseClass = classDef.mods.hasFlag(CASE)
-		val isAbstract = classDef.mods.hasFlag(ABSTRACT)
 		val isTrait = classDef.mods.hasFlag(INTERFACE) && classDef.mods.hasFlag(ABSTRACT)
 		val abstractMembers = classDef.impl.body.collect { case def_ : ValOrDefDef if def_.rhs.isEmpty => def_ }
 	}

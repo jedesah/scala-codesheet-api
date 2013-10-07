@@ -87,19 +87,17 @@ object ScalaCodeSheet {
           else toolBox.eval(Block(totalSymbols.toList :+ expr: _*))
       }
 
-      def evaluateTypeDefBody(body: List[Tree], classParams: List[ValDef] = Nil): BlockResult = {
-            val result = body.map { child =>
-                // One (such as myself) might think it would be a good idea to remove the current
-                // member from the body (list of members) and only supply all other members
-                // but it turns out that because of potential circular dependencies and recursive function
-                // definitions that it is better to just supply them all including the member we are currently
-                // evaluating.
-                // We only grab the rhs of the current member when evaluating so, it's not like
-                // the compiler is going to complain about a duplicate definition.
-                val newSymbols = updateSymbols(symbols, (classParams :+ AST) ::: body)
-                evaluate(child, toolBox, newSymbols, enableSteps)
-            }
-            BlockResult(result.flatten)
+      def evaluateTypeDefBody(body: List[Tree], sampleValues: List[ValOrDefDef] = Nil): BlockResult = {
+          // One (such as myself) might think it would be a good idea to remove the current
+          // member from the body (list of members) and only supply all other members
+          // but it turns out that because of potential circular dependencies and recursive function
+          // definitions that it is better to just supply them all including the member we are currently
+          // evaluating.
+          // We only grab the rhs of the current member when evaluating so, it's not like
+          // the compiler is going to complain about a duplicate definition.
+          val newSymbols = updateSymbols(symbols, (sampleValues :+ AST) ::: body)
+          val result = body.map(child => evaluate(child, toolBox, newSymbols, enableSteps))
+          BlockResult(result.flatten)
       }
 
       def updateSymbols(oldSymbols: List[DefTree], newSymbols: List[Tree]): List[DefTree] = {
@@ -135,23 +133,33 @@ object ScalaCodeSheet {
             val newSymbols = updateSymbols(symbols, childs.init)
             evaluate(childs.last, toolBox, newSymbols, enableSteps)
         }.flatten
-        case classDef: ClassDef =>
-            // TODO: Handle abstract classes in a more awesome way than ignoring them
-            if (classDef.isAbstract) Nil
-            else
-                classDef.constructorOption.flatMap { constructor =>
-                    constructor.sampleParamsOption(classDefs).map { sampleValues =>
-                        // We remove the value defintions resulting from the class parameters and the primary constructor
-                        val body = classDef.impl.body.filter {
-                            case valDef: ValDef => !sampleValues.exists( sampleValDef => sampleValDef.name == valDef.name)
-                            case other => other != constructor
-                        }
-                        val bodyResult = evaluateTypeDefBody(body, sampleValues)
-                        List(ClassDefResult(classDef.name.toString,paramList(sampleValues), bodyResult, line = AST.pos.line))
+        case classDef: ClassDef => {
+              classDef.constructorOption.flatMap { constructor =>
+                  constructor.sampleParamsOption(classDefs).map { sampleParams =>
+                    // We remove the value defintions resulting from the class parameters and the primary constructor
+                    val body = classDef.impl.body.filter {
+                        case valDef: ValDef => !sampleParams.exists( sampleValDef => sampleValDef.name == valDef.name)
+                        case other => other != constructor
                     }
-                } getOrElse {
-                    Nil
+                    val abstractMembers = body.collect { case def_ : ValOrDefDef if def_.rhs.isEmpty => def_ }
+                    val implAbstractMembersOptions = abstractMembers.implementAbstractMembers(classDefs, createDefaultSamplePool)
+
+                    if (implAbstractMembersOptions.contains(None)) Nil
+                    else {
+                      val implementedMembers = implAbstractMembersOptions.flatten
+                      val body2 = body.filter {
+                        case valDef: ValOrDefDef => !implementedMembers.exists( sampleValDef => sampleValDef.name == valDef.name)
+                        case other => other != constructor
+                      }
+                      val sampleValues = sampleParams ++ implementedMembers
+                      val bodyResult = evaluateTypeDefBody(body2, sampleValues)
+                      List(ClassDefResult(classDef.name.toString,paramList(sampleParams), bodyResult, line = AST.pos.line))
+                    }
                 }
+            } getOrElse {
+                Nil
+            }
+        }
         case moduleDef: ModuleDef => {
             val body = moduleDef.impl.body.filter(!isConstructor(_))
             List(ModuleDefResult(moduleDef.name.toString, evaluateTypeDefBody(body), line = AST.pos.line))
@@ -227,6 +235,17 @@ object ScalaCodeSheet {
         }
     }
 
+    implicit class BodyWithSample(value: List[ValOrDefDef]) {
+      def implementAbstractMembers(classDefs: Traversable[ClassDef] = Nil,
+                                   samplePool: SamplePool = createDefaultSamplePool): List[Option[ValOrDefDef]] =
+        value.map {
+          case valDef: ValDef => valDef.withSampleValue(classDefs, samplePool)
+          case defDef: DefDef => defDef.tpt.sampleValue(classDefs, samplePool).map { sampleImpl =>
+            DefDef(Modifiers(), defDef.name, List(), defDef.vparamss, TypeTree(), sampleImpl)
+          }
+        }
+    }
+
     implicit class TreeWithSample(tree: Tree) {
 
         def sampleValue(classDefs: Traversable[ClassDef] = Nil,
@@ -244,15 +263,11 @@ object ScalaCodeSheet {
                 // TODO: Consider possibility that an object could extend an abstract type and be of use here
                 classDefs.find(concretePred).orElse(classDefs.find(abstractPred)).flatMap { classDef =>
                     def assignAnonClass: Option[Tree] = {
-                        val implementedMembersOption: List[Option[ValOrDefDef]] = classDef.abstractMembers.map {
-                            case valDef: ValDef => valDef.withSampleValue(classDefs, samplePool)
-                            case defDef: DefDef => defDef.tpt.sampleValue(classDefs, samplePool).map { sampleImpl =>
-                                DefDef(Modifiers(), defDef.name, List(), defDef.vparamss, TypeTree(), sampleImpl)
-                            }
-                        }
-                        if (implementedMembersOption.exists(_.isEmpty)) None
+                        val implementedMembersOption: List[Option[ValOrDefDef]] =
+                          classDef.abstractMembers.implementAbstractMembers(classDefs, samplePool)
+                        if (implementedMembersOption.contains(None)) None
                         else {
-                            val implementedMembers = implementedMembersOption.map(_.get)
+                            val implementedMembers = implementedMembersOption.flatten
                             Some(anonClass(classDef.name.toString, implementedMembers))
                         }
                     }
