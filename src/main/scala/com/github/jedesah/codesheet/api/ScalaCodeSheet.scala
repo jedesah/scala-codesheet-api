@@ -212,7 +212,6 @@ object ScalaCodeSheet {
                     }.flatten
                 }
             }
-            // TODO: Handle currying better
             val allParams = defdef.vparamss.flatten
             sequentialEagerTerminationImpl(allParams)
         }
