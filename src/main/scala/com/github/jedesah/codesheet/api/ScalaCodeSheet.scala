@@ -13,23 +13,32 @@ import com.github.jedesah.AugmentedCollections._
 object ScalaCodeSheet {
 
     case class BlockResult(children: List[Result]) {
-        def userRepr = childrenRepr(1)
-        def wrappedUserRepr(at: Int, forceWrap: Boolean = false): String =
-            if (children.size > 1 || (forceWrap && children.size == 1))
-                " {" + childrenRepr(at).tabulate + "\n}"
+        def userRepr = childrenRepr(1, children)
+        def wrappedUserRepr(at: Int): String =
+            if (children.size > 1)
+                userReprAsBody(at)
             else {
-                val singleChild = childrenRepr(at)
+                val singleChild = childrenRepr(at, children)
                 if (singleChild.isEmpty) ""
                 else if (!singleChild.contains("\n")) " " + singleChild
                 else singleChild.tabulate
             }
-        def childrenRepr(at: Int): String = children.foldLeft((at, "")) { case ((at, result), child) =>
-            val newResult =
-                if (at == child.line && result != "") result + "; " + child.userRepr
-                else result + "\n" * (child.line - at) + child.userRepr
-            (child.line, newResult)
-        }._2
-    }
+		def userReprAsBody(at: Int, implementedMembers: List[ValOrDefDef] = Nil): String = {
+			case class WrappedValOrDefDef(valOrDefDef: ValOrDefDef) {
+				def userRepr = valOrDefDef.toString
+				def line = valOrDefDef.pos.line
+			}
+			val elemsToPrint = (children ++ implementedMembers.map(WrappedValOrDefDef(_))).asInstanceOf[List[{def line: Int; def userRepr: String}]]
+			if (elemsToPrint.isEmpty) "" else " {" + childrenRepr(at, elemsToPrint).tabulate + "\n}"
+		}
+        def childrenRepr(at: Int, elems: List[{ def line: Int; def userRepr: String}]): String =
+			elems.sortBy(_.line).foldLeft((at, "")) { case ((at, result), child) =>
+				val newResult =
+					if (at == child.line && result != "") result + "; " + child.userRepr
+					else result + "\n" * (child.line - at) + child.userRepr
+				(child.line, newResult)
+			}._2
+	}
     abstract class Result(val line: Int) {
         def userRepr: String
         protected def userRepr(params: List[AssignOrNamedArg]) = params.mkStringNoEndsIfEmpty("(", ", ", ")")
@@ -40,12 +49,22 @@ object ScalaCodeSheet {
     case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], rhs: BlockResult, override val line: Int) extends Result(line) {
         def userRepr = name + userRepr(params) + inferredType.map(": " + _).getOrElse("") + " =>" + rhs.wrappedUserRepr(line)
     }
-    case class ClassDefResult(name: String, params: List[AssignOrNamedArg], body: BlockResult, override val line: Int) extends Result(line) {
-        def userRepr = name + userRepr(params) + body.wrappedUserRepr(line, forceWrap = true)
+    class ClassDefResult(val name: String, val params: List[AssignOrNamedArg], val body: BlockResult, override val line: Int) extends Result(line) {
+        def userRepr = "class " + name + userRepr(params) + body.userReprAsBody(line)
+		override def equals(other: Any) = other match { case classDefResult: ClassDefResult => equals(classDefResult) case _ => false }
+		def equals(classDefResult: ClassDefResult) = name == classDefResult.name && params == classDefResult.params && body == classDefResult.body && line == classDefResult.line
     }
+  	object ClassDefResult {
+		def apply(name: String, params: List[AssignOrNamedArg], body: BlockResult, line: Int) = new ClassDefResult(name, params, body, line)
+		def unapply(classDefResult: ClassDefResult) = Some((classDefResult.name, classDefResult.params, classDefResult.body, classDefResult.line))
+	}
+  	case class AbstractClassDefResult(abstractMembers: List[ValOrDefDef], override val name: String, override val params: List[AssignOrNamedArg], override val body: BlockResult, override val line: Int)
+	  extends ClassDefResult(name, params, body, line) {
+		override def userRepr = "abstract class " + name + userRepr(params) + body.userReprAsBody(line, abstractMembers)
+	}
     case class ModuleDefResult(name: String, body: BlockResult, override val line: Int) extends Result(line) {
         def userRepr = {
-            val bodyString = body.wrappedUserRepr(line, forceWrap = true)
+            val bodyString = body.userReprAsBody(line)
             if (bodyString.isEmpty) "" else name + bodyString
         }
     }
@@ -223,7 +242,7 @@ object ScalaCodeSheet {
                             samplePool: SamplePool = createDefaultSamplePool): Option[ValDef] =
             if (valDef.rhs.isEmpty)
                 valDef.sampleValue(classDefs, samplePool).map { rhs =>
-                    ValDef(Modifiers(), valDef.name, TypeTree(), rhs)
+                    atPos(valDef.pos)(ValDef(Modifiers(), valDef.name, TypeTree(), rhs))
                 }
             else
                 Some(valDef)

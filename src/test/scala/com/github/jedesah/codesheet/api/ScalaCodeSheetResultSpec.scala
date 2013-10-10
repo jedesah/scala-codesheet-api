@@ -162,7 +162,7 @@ class ScalaCodeSheetResult extends Specification {
 			"no body" in {
 				val members = List(AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))))
 				val result = ClassDefResult("Dog", members, BlockResult(Nil), line = 1)
-				result.userRepr === "Dog(a = 5)"
+				result.userRepr === "class Dog(a = 5)"
 			}
 			"with body" in {
 				val members = List(
@@ -175,9 +175,49 @@ class ScalaCodeSheetResult extends Specification {
 				val innerFun = DefDefResult("humanAge", params, None, BlockResult(List(ExpressionResult(9, line = 2))), line = 2)
 
 				val classDef = ClassDefResult("Cat", members, BlockResult(List(innerFun)), line = 1)
-				classDef.userRepr === """Cat(name = "foo", age = 3) {
+				classDef.userRepr === """class Cat(name = "foo", age = 3) {
 										|	humanAge(mult = 3) => 9
 										|}""".stripMargin
+			}
+			"abstract" in {
+				"simple" in {
+					val code =
+					  """abstract class Animal {
+						|	val a: Int
+						|}
+					  """.stripMargin
+					val valDef = tb.parse(code).asInstanceOf[ClassDef].impl.body.collect { case valDef: ValDef => valDef}.head
+					val implementedMembers = List(
+						atPos(valDef.pos)(ValDef(Modifiers(), newTermName("a"), TypeTree(), Literal(Constant(3))))
+					)
+					val result = AbstractClassDefResult(implementedMembers, "Animal", Nil, BlockResult(Nil), line = 1)
+					val expected =
+					  """abstract class Animal {
+						|	val a = 3
+						|}""".stripMargin
+					valDef.pos.line === 2
+					result.userRepr ==== expected
+				}
+				"mixed" in {
+					val code =
+					  """abstract class Animal {
+						|	val a: Int
+						|	def b = a * 2
+						|}
+					  """.stripMargin
+					val valDef = tb.parse(code).asInstanceOf[ClassDef].impl.body.collect { case valDef: ValDef => valDef}.head
+					val implementedMembers = List(
+					  atPos(valDef.pos)(ValDef(Modifiers(), newTermName("a"), TypeTree(), Literal(Constant(3))))
+					)
+					val result = AbstractClassDefResult(implementedMembers, "Animal", Nil, BlockResult(DefDefResult("b", Nil, None, ExpressionResult(6, Nil, line = 3), line = 3)), line = 1)
+					val expected =
+					  """abstract class Animal {
+						|	val a = 3
+						|	b => 6
+						|}""".stripMargin
+					valDef.pos.line === 2
+					result.userRepr ==== expected
+				}
 			}
 		}
 		"ModuleDefResult" in {
