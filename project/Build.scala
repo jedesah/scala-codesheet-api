@@ -6,13 +6,13 @@ object ScalaCodeSheetAPIBuild extends Build {
     organization := "com.github.jedesah",
     name         := "codesheet-api",
     version      := "0.3-SNAPSHOT",
-    scalaVersion := "2.11.0-M5",
+    scalaVersion := "2.11.0-M4",
     libraryDependencies := Seq(
       "org.scala-lang" % "scala-compiler" % scalaVersion.value,
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scala-lang" % "scala-library" % scalaVersion.value,
       //"org.specs2" %% "specs2" % "2.2.3" % "test"
-      "org.scalatest" %% "scalatest" % "2.0.M7" % "test"
+      "org.scalatest" %% "scalatest" % "2.0.M6-SNAP35" % "test"
     )
   )
 
