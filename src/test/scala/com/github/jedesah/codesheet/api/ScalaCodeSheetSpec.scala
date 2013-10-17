@@ -54,10 +54,10 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 			"string interpolation" in {
 				"steps" in {
-					computeResults("""s"allo"""") ==== ExpressionResult("allo", line = 1)
+					computeResults(""" s"allo" """) ==== ExpressionResult("allo", line = 1)
 				}.pendingUntilFixed
 				"no steps" in {
-					computeResults("""s"allo"""", enableSteps = false) ==== ExpressionResult("allo", line = 1)
+					computeResults(""" s"allo" """, enableSteps = false) ==== ExpressionResult("allo", line = 1)
 				}
 			}
 		}
@@ -119,7 +119,7 @@ class ScalaCodeSheetSpec extends Specification {
 						computeResults(code) must beLike { case BlockResult(List(first)) =>
 							first must beLike { case DefDefResult("addExclamation", params, None, rhs, 1) =>
 								rhs must beLike { case BlockResult(List(ExpressionResult(ObjectResult("foobarbarbiz"), List(step), 1))) =>
-									structureEquals(step, tb.parse(""""foo" + "bar" * 2 + "biz""""))
+									structureEquals(step, tb.parse(""" "foo" + "bar" * 2 + "biz" """))
 								}
 								params must beLike { case List(a,b,c) =>
 									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant("foo"))))
