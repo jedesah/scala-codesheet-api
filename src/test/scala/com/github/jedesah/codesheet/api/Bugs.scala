@@ -22,15 +22,11 @@ class Bugs extends Specification {
 					expr ==== SimpleExpressionResult(List(3, 'f', true), Nil, 4)
 				}
 			}
-			"2" in {
-				val code = "def foo(a: AnyVal, b: AnyVal, c: AnyVal) = List(a,b,c)"
-				computeResults(code, enableSteps = false).size ==== 1
-			}
 			"AnyVal" in {
 				val code = "def foo(a: AnyVal, b: AnyVal, c: AnyVal) = List(a,b,c)"
 				computeResults(code, enableSteps = false) must beLike { case List(foo) =>
 					foo must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-						ok//rhs ==== ExpressionResult("3! f! true!", Nil, 1)
+						ok
 					}
 				}
 			}
