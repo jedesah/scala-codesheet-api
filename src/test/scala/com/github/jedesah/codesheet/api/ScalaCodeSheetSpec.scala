@@ -792,6 +792,15 @@ class ScalaCodeSheetSpec extends Specification {
 				}
 			}
 		}
+		"block" in {
+			val code = """{
+                         |	4 + 4
+                         |	5
+                         |}""".stripMargin
+			computeResults(code) must beLike { case List(block) =>
+				block ==== BlockResult(List(SimpleExpressionResult(8, line = 2), SimpleExpressionResult(5, line = 3)), line = 1)
+			}
+		}
 		"class definition" in {
 			"simple" in {
 				val code = "class Car(model: String, year: Int)"

@@ -217,7 +217,7 @@ object ScalaCodeSheet {
 			}
 		}
 		AST match {
-			case block: Block => {
+			case block: Block if block.pos == NoPosition => {
 				val results = block.children.inits.toList.reverse.drop(1).map { childs =>
 					evaluateImpl(childs.last, childs.init.collect{ case s: DefTree => s })
 				}
