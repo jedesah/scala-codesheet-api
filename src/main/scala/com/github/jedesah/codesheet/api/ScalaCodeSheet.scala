@@ -202,7 +202,7 @@ object ScalaCodeSheet {
 						val sampleValues = sampleParams ++ implementedMembers
 						val (trees, results) = evaluateList(noAbstract, classDefs)
 						val classDefResult = ClassDefResult(AST.name.toString, paramList(sampleParams), BlockResult(results, line = AST.pos.line), line = AST.pos.line)
-						val blockOption = if (trees.isEmpty) None else Some(Block(sampleValues ++ trees.init, trees.last))
+						val blockOption = if (trees.isEmpty) None else Some(Block(sampleValues ++ trees, Literal(Constant(()))))
 						Some(blockOption, classDefResult)
 					}
 				}
@@ -211,7 +211,7 @@ object ScalaCodeSheet {
 		def evaluateModuleDef(AST: ModuleDef, classDefs: Traversable[ClassDef]): (Block, ModuleDefResult) = {
 			val body = AST.impl.body.filter(!isConstructor(_))
 			val (trees, results) = evaluateList(body, classDefs)
-			(Block(trees.init, trees.last), ModuleDefResult(AST.name.toString, BlockResult(results, line = AST.pos.line), line = AST.pos.line))
+			(Block(trees, Literal(Constant(()))), ModuleDefResult(AST.name.toString, BlockResult(results, line = AST.pos.line), line = AST.pos.line))
 		}
 		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef]): (List[Tree], Option[Result]) = {
 			AST match {

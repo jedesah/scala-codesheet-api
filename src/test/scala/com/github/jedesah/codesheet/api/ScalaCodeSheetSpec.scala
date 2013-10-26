@@ -16,7 +16,7 @@ class ScalaCodeSheetSpec extends Specification {
 		else first === second
 
 	val tb = cm.mkToolBox()
-	args.select(ex = "with only simple values")
+	// args.select(ex = "7")
 
 	"ScalaCodeSheet" should {
 		"expressions" in {
@@ -948,7 +948,25 @@ class ScalaCodeSheetSpec extends Specification {
 					 		body === BlockResult(
 					 			List(
 					 				ValDefResult("a", None, SimpleExpressionResult(5, Nil, 2), 2),
-					 				ValDefResult("tretre", None, SimpleExpressionResult("goo", Nil, 3), 3)
+					 				ValDefResult("tretre", None, SimpleExpressionResult("goo", Nil, 3), 3),
+					 				ValDefResult("b", None, SimpleExpressionResult(true, Nil, 4), 4)
+					 			), line = 1)
+						}
+					}
+				}
+				"7" in {
+					val code = """case class Car(model: String, year: Int) {
+                                 |	val a = model
+                                 |}""".stripMargin
+					computeResults(code, enableSteps = false) must beLike { case List(classDef) =>
+					 	classDef must beLike {case ClassDefResult("Car", params, body,1) =>
+							params must beLike { case List(a, b) =>
+								structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+								structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+					 		}
+					 		body === BlockResult(
+					 			List(
+					 				ValDefResult("a", None, SimpleExpressionResult("foo", Nil, 2), 2)
 					 			), line = 1)
 						}
 					}
