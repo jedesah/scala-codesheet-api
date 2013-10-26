@@ -12,6 +12,9 @@ import com.github.jedesah.AugmentedCollections._
 
 object ScalaCodeSheet {
 
+	val nameOfMapUsedToRememberResults = "youcannotnameyourvariablelikethisincodesheet_a"
+	val nameOfTemporaryValueCreatedToKeepResult = "youcannotnameyourvariablelikethisincodesheet_b"
+
 	def childrenRepr(at: Int, elems: List[{ def line: Int; def userRepr: String}]): String =
 		elems.sortBy(_.line).foldLeft((at, "")) { case ((at, result), child) =>
 			val newResult =
@@ -32,8 +35,11 @@ object ScalaCodeSheet {
 	abstract class Result(val line: Int) {
 		def userRepr: String
 		protected def asParamList(params: List[AssignOrNamedArg]) = params.mkStringNoEndsIfEmpty("(", ", ", ")")
+		def transform(pf: PartialFunction[Result, Result]): Result
 	}
-	abstract class ExpressionResult(override val line: Int) extends Result(line)
+	abstract class ExpressionResult(override val line: Int) extends Result(line) {
+		def transform(pf: PartialFunction[Result, Result]): ExpressionResult
+	}
 	case class BlockResult(children: List[Result], override val line: Int) extends ExpressionResult(line) {
 		def userRepr = userRepr(Nil)
 		def userRepr(implementedMembers: List[ValOrDefDef]): String = {
@@ -49,21 +55,42 @@ object ScalaCodeSheet {
 				else s"{$childRepr}"
 			}
 		}
+		def transform(pf: PartialFunction[Result, Result]): BlockResult = {
+			val sub = transformChildren(pf)
+			pf.applyOrElse(sub, identity[Result]).asInstanceOf[BlockResult]
+		}
+		def transformChildren(pf: PartialFunction[Result, Result]) = copy(children = children.map(_.transform(pf)))
 	}
 	case class ValDefResult(name: String, inferredType: Option[String], rhs: ExpressionResult, override val line: Int) extends Result(line) {
 		def userRepr = {
 			val lineDiff = rhs.line - line
 			name + inferredType.map(": " + _).getOrElse("") + " =" + "\n" * lineDiff + (if(lineDiff > 0) "\t" else " ") + rhs.userRepr
 		}
+		def transform(pf: PartialFunction[Result, Result]): ValDefResult = {
+			val sub = transformChildren(pf)
+			pf.applyOrElse(sub, identity[Result]).asInstanceOf[ValDefResult]
+		}
+		def transformChildren(pf: PartialFunction[Result, Result]) = copy(rhs = rhs.transform(pf))
 	}
 	case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], rhs: ExpressionResult, override val line: Int) extends Result(line) {
 		def userRepr = name + asParamList(params) + inferredType.map(": " + _).getOrElse("") + " => " + rhs.userRepr
+		def transform(pf: PartialFunction[Result, Result]): DefDefResult = {
+			val sub = transformChildren(pf)
+			pf.applyOrElse(sub, identity[Result]).asInstanceOf[DefDefResult]
+		}
+		def transformChildren(pf: PartialFunction[Result, Result]) = copy(rhs = rhs.transform(pf))
 	}
 	class ClassDefResult(val name: String, val params: List[AssignOrNamedArg], val body: BlockResult, override val line: Int) extends Result(line) {
 		def bodyRepr = body.userRepr
 		def userRepr = "class " + name + asParamList(params) + (if (bodyRepr.isEmpty) "" else " " + bodyRepr)
 		override def equals(other: Any) = other match { case classDefResult: ClassDefResult => equals(classDefResult) case _ => false }
 		def equals(classDefResult: ClassDefResult) = name == classDefResult.name && params == classDefResult.params && body == classDefResult.body && line == classDefResult.line
+		def transform(pf: PartialFunction[Result, Result]): ClassDefResult = {
+			val sub = transformChildren(pf)
+			pf.applyOrElse(sub, identity[Result]).asInstanceOf[ClassDefResult]
+		}
+		def transformChildren(pf: PartialFunction[Result, Result]) = copy(body = body.transform(pf))
+		def copy(name: String = name, params: List[AssignOrNamedArg] = params, body: BlockResult = body, line: Int = line) = ClassDefResult(name, params, body, line)
 	}
 	object ClassDefResult {
 		def apply(name: String, params: List[AssignOrNamedArg], body: BlockResult, line: Int) = new ClassDefResult(name, params, body, line)
@@ -79,12 +106,23 @@ object ScalaCodeSheet {
 			val bodyString = body.userRepr
 			if (bodyString.isEmpty) "" else name + " " + bodyString
 		}
+		def transform(pf: PartialFunction[Result, Result]): ModuleDefResult = {
+			val sub = transformChildren(pf)
+			pf.applyOrElse(sub, identity[Result]).asInstanceOf[ModuleDefResult]
+		}
+		def transformChildren(pf: PartialFunction[Result, Result]) = copy(body = body.transform(pf))
 	}
 	case class SimpleExpressionResult(final_ : ValueResult, steps: List[Tree] = Nil, override val line: Int) extends ExpressionResult(line) {
 		def userRepr = (steps.map(_.prettyPrint) :+ final_.userRepr).mkString(" => ")
+		def transform(pf: PartialFunction[Result, Result]): SimpleExpressionResult = {
+			pf.applyOrElse(this, identity[Result]).asInstanceOf[SimpleExpressionResult]
+		}
 	}
 	case class CompileErrorResult(message: String, override val line: Int) extends Result(line) {
 		def userRepr = message
+		def transform(pf: PartialFunction[Result, Result]): CompileErrorResult = {
+			pf.applyOrElse(this, identity[Result]).asInstanceOf[CompileErrorResult]
+		}
 	}
 	trait ValueResult {
 		def userRepr: String
@@ -101,136 +139,142 @@ object ScalaCodeSheet {
 			case _ => toSource(value) getOrElse value.toString
 		}
 	}
+	private case class PlaceHolder(id: Int) extends ValueResult {
+		def userRepr = error("This should not be called")
+	}
 	implicit def createObjectResult(value: Any) = ObjectResult(value)
 
 	val notImplSymbol = Ident(newTermName("$qmark$qmark$qmark"))
 
-	def evaluate(AST: Tree, toolBox: ToolBox[reflect.runtime.universe.type], symbols: List[DefTree] = Nil, enableSteps: Boolean): List[Result] = {
-		def evaluateImpl(AST: Tree, symbols: List[DefTree]): Option[Result] = {
-			lazy val classDefs: Traversable[ClassDef] = symbols.collect{ case elem: ClassDef => elem }
+	def analyseAndTransform(AST: Tree, enableSteps: Boolean): (Tree, List[Result]) = {
 
-			def evaluateWithSymbols(expr: Tree, extraSymbols: Traversable[Tree] = Set()) = {
-				// In Scala 2.10.1, when you create a Block using the following deprecated method, if you pass in only one argument
-				// it will be a block that adds a unit expressions at it's end and evaluates to unit. Useless behavior as far as we are concerned.
-				// TODO: Remove use of deprecated Block constructor.
-				val totalSymbols = symbols ++ extraSymbols
-				if (totalSymbols.isEmpty) toolBox.eval(expr)
-				else toolBox.eval(Block(totalSymbols.toList :+ expr: _*))
+		var index = 0
+
+		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef]): (Option[ValDef], ValDefResult) = {
+			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+			// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
+			// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
+			val valDef = rhsTrees.headOption.map { rhsTree =>
+				ValDef(Modifiers(), AST.name, TypeTree(), rhsTree)
 			}
-
-			def evaluateTypeDefBody(body: List[Tree], sampleValues: List[ValOrDefDef] = Nil, line: Int): BlockResult = {
-				// One (such as myself) might think it would be a good idea to remove the current
-				// member from the body (list of members) and only supply all other members
-				// but it turns out that because of potential circular dependencies and recursive function
-				// definitions that it is better to just supply them all including the member we are currently
-				// evaluating.
-				// We only grab the rhs of the current member when evaluating so, it's not like
-				// the compiler is going to complain about a duplicate definition.
-				val newSymbols = updateSymbols(symbols, (sampleValues :+ AST) ::: body)
-				val result = body.map(child => evaluateImpl(child, newSymbols))
-				BlockResult(result.flatten, line)
-			}
-
-			def updateSymbols(oldSymbols: List[DefTree], newSymbols: List[Tree]): List[DefTree] = {
-				val newDefSymbols = newSymbols.collect{ case s: DefTree => s }
-				val oldInNewScope = oldSymbols.filter( symbol => !newDefSymbols.exists(symbol.name.toString == _.name.toString))
-				oldInNewScope ++ newDefSymbols
-			}
-
-			object StepTransformer extends Transformer {
-				def firstStep(tree: Tree): Tree = tree match {
-					case _: Ident => tree
-					case _ => transform(tree)
+			val result = ValDefResult(AST.name.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
+			(valDef, result)
+		}
+		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Block], DefDefResult)] = {
+			AST.sampleParamsOption(classDefs) map { sampleValues =>
+				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+				// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
+				// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
+				val block = rhsTrees.headOption.map { rhsTree =>
+					Block(sampleValues, rhsTree)
 				}
-				override def transform(tree: Tree): Tree = tree match {
-					case ident: Ident => {
-						val result = evaluateWithSymbols(ident)
-						val sourceString = toSource(result)
-						sourceString.map(toolBox.parse(_)) getOrElse ident
+				val defDefResult = DefDefResult(AST.name.toString, paramList(sampleValues), None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
+				(block, defDefResult)
+			}
+		}
+		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef]): (Block, BlockResult) = {
+			val (trees, results) = evaluateList(AST.children, classDefs)
+			(Block(trees.init, trees.last), BlockResult(results, AST.pos.line))
+		}
+		def evaluateList(list: List[Tree], classDefs: Traversable[ClassDef]) : (List[Tree], List[Result]) = {
+			val additionnalClassDefs = list.collect { case child: ClassDef => child }
+			val (childTrees, childResults) = list.map(evaluateImpl(_, classDefs ++ additionnalClassDefs)).unzip
+			(childTrees.flatten, childResults.flatten)
+		}
+		def evaluateClassDef(AST: ClassDef, classDefs: Traversable[ClassDef]): Option[(Option[Block], ClassDefResult)] = {
+			AST.constructorOption.flatMap { constructor =>
+				constructor.sampleParamsOption(classDefs).map { sampleParams =>
+					// We remove the value defintions resulting from the class parameters and the primary constructor
+					val noSynthetic = AST.impl.body.filter {
+						case valDef: ValDef => !sampleParams.exists( sampleValDef => sampleValDef.name == valDef.name)
+						case other => other != constructor
 					}
-					case _ => super.transform(tree)
-				}
-			}
+					val abstractMembers = noSynthetic.collect { case def_ : ValOrDefDef if def_.rhs.isEmpty => def_ }
+					val implAbstractMembersOptions = abstractMembers.implementAbstractMembers(classDefs, createDefaultSamplePool)
 
+					if (implAbstractMembersOptions.contains(None)) None
+					else {
+						val implementedMembers = implAbstractMembersOptions.flatten
+						val noAbstract = noSynthetic.filter {
+							case valDef: ValOrDefDef => !implementedMembers.exists( sampleValDef => sampleValDef.name == valDef.name)
+							case other => other != constructor
+						}
+						val sampleValues = sampleParams ++ implementedMembers
+						val (trees, results) = evaluateList(noAbstract, classDefs)
+						val classDefResult = ClassDefResult(AST.name.toString, paramList(sampleParams), BlockResult(results, line = AST.pos.line), line = AST.pos.line)
+						val blockOption = if (trees.isEmpty) None else Some(Block(sampleValues ++ trees.init, trees.last))
+						Some(blockOption, classDefResult)
+					}
+				}
+			}.flatten
+		}
+		def evaluateModuleDef(AST: ModuleDef, classDefs: Traversable[ClassDef]): (Block, ModuleDefResult) = {
+			val body = AST.impl.body.filter(!isConstructor(_))
+			val (trees, results) = evaluateList(body, classDefs)
+			(Block(trees.init, trees.last), ModuleDefResult(AST.name.toString, BlockResult(results, line = AST.pos.line), line = AST.pos.line))
+		}
+		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef]): (List[Tree], Option[Result]) = {
 			AST match {
-				case ValDef(_, name, _, rhs) => {
-					val rhsResult = evaluateImpl(rhs, symbols)
-					Some(ValDefResult(name.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line))
+				case valDef: ValDef => {
+					val (newValDefOption, valDefResult) = evaluateValDef(valDef, classDefs)
+					(newValDefOption.toList	, Some(valDefResult))
 				}
-				// We fold over each child and all of it's preceding childs (inits) and evaluate
-				// it with it's preceding children
-				case expr: Block => {
-					val results = expr.children.inits.toList.reverse.drop(1).map { childs =>
-						val newSymbols = updateSymbols(symbols, childs.init)
-						evaluate(childs.last, toolBox, newSymbols, enableSteps)
-					}
-					Some(BlockResult(results.flatten, expr.pos.line))
+				case funDef: DefDef => {
+					evaluateDefDef(funDef, classDefs).map { case (blockOption, defDefResult) =>
+						(funDef :: blockOption.toList, Some(defDefResult))
+					} getOrElse (List(funDef), None)
+				}
+				case block: Block => {
+					val (newblock, blockResult) = evaluateBlock(block, classDefs)
+					(List(newblock), Some(blockResult))
 				}
 				case classDef: ClassDef => {
-					classDef.constructorOption.flatMap { constructor =>
-						constructor.sampleParamsOption(classDefs).map { sampleParams =>
-							// We remove the value defintions resulting from the class parameters and the primary constructor
-							val body = classDef.impl.body.filter {
-								case valDef: ValDef => !sampleParams.exists( sampleValDef => sampleValDef.name == valDef.name)
-								case other => other != constructor
-							}
-							val abstractMembers = body.collect { case def_ : ValOrDefDef if def_.rhs.isEmpty => def_ }
-							val implAbstractMembersOptions = abstractMembers.implementAbstractMembers(classDefs, createDefaultSamplePool)
-
-							if (implAbstractMembersOptions.contains(None)) None
-							else {
-								val implementedMembers = implAbstractMembersOptions.flatten
-								val body2 = body.filter {
-									case valDef: ValOrDefDef => !implementedMembers.exists( sampleValDef => sampleValDef.name == valDef.name)
-									case other => other != constructor
-								}
-								val sampleValues = sampleParams ++ implementedMembers
-								val bodyResult = evaluateTypeDefBody(body2, sampleValues, classDef.impl.pos.line)
-								Some(ClassDefResult(classDef.name.toString,paramList(sampleParams), bodyResult, line = AST.pos.line))
-							}
-						}
-					}.flatten
+					evaluateClassDef(classDef, classDefs).map { case (blockOption, classDefResult) =>
+						(classDef :: blockOption.toList, Some(classDefResult))
+					} getOrElse (List(classDef), None)
 				}
 				case moduleDef: ModuleDef => {
-					val body = moduleDef.impl.body.filter(!isConstructor(_))
-					Some(ModuleDefResult(moduleDef.name.toString, evaluateTypeDefBody(body, line = moduleDef.impl.pos.line), line = AST.pos.line))
+					val (block, moduleDefResult) = evaluateModuleDef(moduleDef, classDefs)
+					(List(moduleDef, block), Some(moduleDefResult))
 				}
-				case defdef : DefDef => {
-					defdef.sampleParamsOption(classDefs) map { sampleValues =>
-						val newSymbols = updateSymbols(symbols, sampleValues)
-						val rhs = evaluateImpl(defdef.rhs, newSymbols).get
-						DefDefResult(defdef.name.toString, paramList(sampleValues), None, line = AST.pos.line, rhs = rhs.asInstanceOf[ExpressionResult])
-					}
-				}
-				case EmptyTree => None
+				case EmptyTree => (Nil, None)
 				case expr => {
-					val result: ValueResult = if (expr.equalsStructure(notImplSymbol)) NotImplementedResult else evaluateWithSymbols(AST)
+					val steps = Nil
+					val (trees, valueResult) = if (expr.equalsStructure(notImplSymbol)) (Nil, NotImplementedResult)
+					else {
+						val valDef = ValDef(Modifiers(), newTermName(nameOfTemporaryValueCreatedToKeepResult), TypeTree(), expr)
+						val storeInMap = Apply(Select(Ident(newTermName(nameOfMapUsedToRememberResults)), newTermName("update")), List(Literal(Constant(index)), Ident(newTermName(nameOfTemporaryValueCreatedToKeepResult))))
+						val refA = Ident(newTermName(nameOfTemporaryValueCreatedToKeepResult))
+						val tree = Block(List(valDef, storeInMap), refA)
+						val result = PlaceHolder(index)
+						index = index + 1
+						(List(tree), result)
+					}
+					(trees, Some(SimpleExpressionResult(final_ = valueResult, steps = steps, line = AST.pos.line)))
+				}
+			}
+		}
 
-					val steps =
-						if (enableSteps) {
-							val firstStep = StepTransformer.firstStep(expr)
-							if(firstStep.equalsStructure(expr)) Nil else List(firstStep)
-						}
-						else Nil
-					Some(SimpleExpressionResult(final_ = result , steps = steps, line = AST.pos.line))
-				}
+		val beginMap =  ValDef(Modifiers(), newTermName(nameOfMapUsedToRememberResults), TypeTree(), Apply(TypeApply(Select(Select(Select(Ident(newTermName("scala")), newTermName("collection")), newTermName("mutable")), newTermName("Map")), List(Ident(newTypeName("Int")), Ident(newTypeName("Any")))), List()))
+		val retrieveMap = Ident(newTermName(nameOfMapUsedToRememberResults))
+
+		val (trees, results) = AST match {
+			case block: Block if block.pos == NoPosition => evaluateList(block.children, Nil)
+			case _ => {
+				val (trees, resultOption) = evaluateImpl(AST, Nil)
+				(trees, resultOption.toList)
 			}
 		}
-		AST match {
-			case block: Block if block.pos == NoPosition => {
-				val results = block.children.inits.toList.reverse.drop(1).map { childs =>
-					evaluateImpl(childs.last, childs.init.collect{ case s: DefTree => s })
-				}
-				results.flatten
-			}
-			case _ => evaluateImpl(AST, symbols).map(List(_)) getOrElse Nil
-		}
+
+		(Block(beginMap :: trees, retrieveMap), results)
 	}
 
 	def computeResults(code: String, enableSteps: Boolean = true): List[Result] = try {
 		val toolBox = cm.mkToolBox()
 		val AST = toolBox.parse(code)
-		evaluate(AST, toolBox, enableSteps = enableSteps)
+		val (instrumented, results) = analyseAndTransform(AST, enableSteps = enableSteps)
+		val resultValues = toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Any]]
+		results.map(_.transform { case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) => simple.copy(final_ = resultValues(id))})
 	} catch {
 		case ToolBoxError(msg, cause) => {
 			val userMessage = msg.dropWhile(_ != ':').drop(2).dropWhile(char => char == ' ' || char == '\n' || char == '\t')
