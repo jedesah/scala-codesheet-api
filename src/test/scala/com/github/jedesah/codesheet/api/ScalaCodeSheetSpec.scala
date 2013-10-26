@@ -16,6 +16,7 @@ class ScalaCodeSheetSpec extends Specification {
 		else first === second
 
 	val tb = cm.mkToolBox()
+	args.select(ex = "with only simple values")
 
 	"ScalaCodeSheet" should {
 		"expressions" in {
@@ -767,6 +768,14 @@ class ScalaCodeSheetSpec extends Specification {
 					second === ValDefResult("gg", None, rhs = SimpleExpressionResult(9, line = 2), line = 2)
 				}
 			}
+			"two" in {
+				val code = """val a = 34
+								|val b = 45""".stripMargin
+				computeResults(code) must beLike { case List(first, second) =>
+					first ==== ValDefResult("a", None, rhs = SimpleExpressionResult(34, line = 1), line = 1)
+					second ==== ValDefResult("b", None, rhs = SimpleExpressionResult(45, line = 2), line = 2)
+				}
+			}
 		}
 		"block" in {
 			val code = """{
@@ -921,6 +930,26 @@ class ScalaCodeSheetSpec extends Specification {
 									body === SimpleExpressionResult(Nil, Nil, 3)
 					 			}
 					 		}
+						}
+					}
+				}
+				"6" in {
+					val code = """case class Car(model: String, year: Int) {
+                                 |	val a = 5
+                                 |	val tretre = "goo"
+                                 |	val b = true
+                                 |}""".stripMargin
+					computeResults(code, enableSteps = false) must beLike { case List(classDef) =>
+					 	classDef must beLike {case ClassDefResult("Car", params, body,1) =>
+							params must beLike { case List(a, b) =>
+								structureEquals(a, AssignOrNamedArg(Ident(newTermName("model")), Literal(Constant("foo"))))
+								structureEquals(b, AssignOrNamedArg(Ident(newTermName("year")), Literal(Constant(3))))
+					 		}
+					 		body === BlockResult(
+					 			List(
+					 				ValDefResult("a", None, SimpleExpressionResult(5, Nil, 2), 2),
+					 				ValDefResult("tretre", None, SimpleExpressionResult("goo", Nil, 3), 3)
+					 			), line = 1)
 						}
 					}
 				}
