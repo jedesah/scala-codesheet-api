@@ -12,8 +12,8 @@ import com.github.jedesah.AugmentedCollections._
 
 object ScalaCodeSheet {
 
-	val nameOfMapUsedToRememberResults = "youcannotnameyourvariablelikethisincodesheet_a"
-	val nameOfTemporaryValueCreatedToKeepResult = "youcannotnameyourvariablelikethisincodesheet_b"
+	val nameOfMap = "youcannotnameyourvariablelikethisincodesheet_map"
+	val nameOfTemp = "youcannotnameyourvariablelikethisincodesheet_temp"
 
 	def childrenRepr(at: Int, elems: List[{ def line: Int; def userRepr: String}]): String =
 		elems.sortBy(_.line).foldLeft((at, "")) { case ((at, result), child) =>
@@ -242,9 +242,9 @@ object ScalaCodeSheet {
 					val steps = Nil
 					val (trees, valueResult) = if (expr.equalsStructure(notImplSymbol)) (Nil, NotImplementedResult)
 					else {
-						val valDef = ValDef(Modifiers(), newTermName(nameOfTemporaryValueCreatedToKeepResult), TypeTree(), expr)
-						val storeInMap = Apply(Select(Ident(newTermName(nameOfMapUsedToRememberResults)), newTermName("update")), List(Literal(Constant(index)), Ident(newTermName(nameOfTemporaryValueCreatedToKeepResult))))
-						val refA = Ident(newTermName(nameOfTemporaryValueCreatedToKeepResult))
+						val valDef = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), expr)
+						val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(Literal(Constant(index)), Ident(newTermName(nameOfTemp))))
+						val refA = Ident(newTermName(nameOfTemp))
 						val tree = Block(List(valDef, storeInMap), refA)
 						val result = PlaceHolder(index)
 						index = index + 1
