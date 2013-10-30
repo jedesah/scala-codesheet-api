@@ -776,6 +776,22 @@ class ScalaCodeSheetSpec extends Specification {
 				}
 			}
 		}
+		"variable definition" in {
+			"simple" in {
+				val code = "var a = 56"
+				computeResults(code) must beLike { case Result(List(only), "") =>
+					only ==== ValDefResult("a", None, rhs = SimpleExpressionResult(56, line = 1), line = 1)
+				}
+			}
+			"with redefinition" in {
+				val code = """var a = 45
+							 |a = 47""".stripMargin
+				computeResults(code) must beLike { case Result(List(first, second), "") =>
+					first ==== ValDefResult("a", None, rhs = SimpleExpressionResult(45, line = 1), line = 1)
+					second ==== ValDefResult("a", None, rhs = SimpleExpressionResult(47, line = 2), line = 2)
+				}
+			}
+		}
 		"block" in {
 			val code = """{
                          |	4 + 4

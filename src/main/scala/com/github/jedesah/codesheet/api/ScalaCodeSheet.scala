@@ -155,10 +155,18 @@ object ScalaCodeSheet {
 			// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
 			// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
 			val valDef = rhsTrees.headOption.map { rhsTree =>
-				ValDef(Modifiers(), AST.name, TypeTree(), rhsTree)
+				ValDef(AST.mods, AST.name, TypeTree(), rhsTree)
 			}
 			val result = ValDefResult(AST.name.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
 			(valDef, result)
+		}
+		def evaluateAssign(AST: Assign, classDefs: Traversable[ClassDef]): (Option[Assign], ValDefResult) = {
+			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+			val assign = rhsTrees.headOption.map { rhsTree =>
+				Assign(AST.lhs, rhsTree)
+			}
+			val result = ValDefResult(AST.lhs.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
+			(assign, result)
 		}
 		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Block], DefDefResult)] = {
 			AST.sampleParamsOption(classDefs) map { sampleValues =>
@@ -215,6 +223,10 @@ object ScalaCodeSheet {
 		}
 		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef]): (List[Tree], Option[StatementResult]) = {
 			AST match {
+				case assign: Assign => {
+					val (newAssignOption, valDefResult) = evaluateAssign(assign, classDefs)
+					(newAssignOption.toList, Some(valDefResult))
+				}
 				case valDef: ValDef => {
 					val (newValDefOption, valDefResult) = evaluateValDef(valDef, classDefs)
 					(newValDefOption.toList	, Some(valDefResult))
