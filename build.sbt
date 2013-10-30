@@ -9,11 +9,9 @@ versionWithGit
 
 scalaVersion := "2.10.3"
 
-publishTo := Some(Resolver.file("Github Pages", 
-	Path.userHome / "Repo" / "project" / "log4900.github.com" / "maven" asFile)(
-		Patterns(true, Resolver.mavenStyleBasePattern)
-	)
-)
+seq(bintrayPublishSettings:_*)
+
+licenses += ("GPL-3.0", url("http://www.gnu.org/copyleft/gpl.html"))
 
 libraryDependencies += "org.scala-lang" % "scala-compiler" % scalaVersion.value
 
