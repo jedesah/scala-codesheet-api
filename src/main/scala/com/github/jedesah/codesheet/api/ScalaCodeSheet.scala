@@ -136,7 +136,7 @@ object ScalaCodeSheet {
 	case class ObjectResult(value: Any) extends ValueResult {
 		def userRepr = value match {
 			case _: scala.runtime.BoxedUnit | scala.Unit => ""
-			case _ => toSource(value) getOrElse value.toString
+			case _ => value.toString
 		}
 	}
 	private case class PlaceHolder(id: Int) extends ValueResult {

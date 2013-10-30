@@ -21,7 +21,7 @@ class ScalaCodeSheetResult extends Specification {
 					List(SimpleExpressionResult("3", line = 1)),
 					line = 1
 				)
-				result.userRepr ==== """{"3"}"""
+				result.userRepr ==== "{3}"
 			}
 			"two" in {
 				val result = BlockResult(
@@ -31,7 +31,7 @@ class ScalaCodeSheetResult extends Specification {
 					),
 					line = 1
 				)
-				val expected = """{a = "5"
+				val expected = """{a = 5
 								 |	true
 								 |}""".stripMargin
 				result.userRepr ==== expected
@@ -45,8 +45,8 @@ class ScalaCodeSheetResult extends Specification {
 					),
 					line = 1
 				)
-				val expected = """{perform => "bar"
-								 |	other: Animal = "Dog(Maven)"
+				val expected = """{perform => bar
+								 |	other: Animal = Dog(Maven)
 								 |	1.5
 								 |}""".stripMargin
 				result.userRepr ==== expected
@@ -84,7 +84,7 @@ class ScalaCodeSheetResult extends Specification {
 			}
 			"with inferred type" in {
 				val result = ValDefResult("a", Some("Animal"), SimpleExpressionResult("Cat(5)", line = 1), line = 1)
-				result.userRepr === "a: Animal = \"Cat(5)\""
+				result.userRepr === "a: Animal = Cat(5)"
 			}
 			"with complex block" in {
 				val result = ValDefResult("a", None, BlockResult(
@@ -95,8 +95,8 @@ class ScalaCodeSheetResult extends Specification {
 					line = 1
 				), line = 1)
 				val expected = """a = {
-								 |	cc = "Cat(4)"
-								 |	"Cat(6)"
+								 |	cc = Cat(4)
+								 |	Cat(6)
 								 |}""".stripMargin
 				result.userRepr ==== expected
 			}
@@ -132,8 +132,8 @@ class ScalaCodeSheetResult extends Specification {
 					line = 1
 				), line = 1)
 				val expected = """perform => {
-								 |	cc = "Cat(4)"
-								 |	"Cat(6)"
+								 |	cc = Cat(4)
+								 |	Cat(6)
 								 |}""".stripMargin
 				result.userRepr ==== expected
 			}
@@ -155,12 +155,12 @@ class ScalaCodeSheetResult extends Specification {
 				"one param" in {
 					case class Cat(name: String)
 					val result = SimpleExpressionResult(final_ = Cat("Jack"), line = 1)
-					result.userRepr === "Cat(\"Jack\")"
+					result.userRepr === "Cat(Jack)"
 				}
 				"two params" in {
 					case class Cat(age: Int, name: String)
 					val result = SimpleExpressionResult(final_ = Cat(12, "Jack"), line = 1)
-					result.userRepr === "Cat(12, \"Jack\")"
+					result.userRepr === "Cat(12,Jack)"
 				}
 			}
 		}
