@@ -291,10 +291,10 @@ object ScalaCodeSheet {
 					val steps = Nil
 					val (trees, valueResult) = if (expr.equalsStructure(notImplSymbol)) (Nil, NotImplementedResult)
 					else {
-						val valDef = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), expr)
+						val tempVal = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), expr)
 						val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(Literal(Constant(index)), Ident(newTermName(nameOfTemp))))
 						val refA = Ident(newTermName(nameOfTemp))
-						val tree = Block(List(valDef, storeInMap), refA)
+						val tree = Block(List(tempVal, storeInMap), refA)
 						val result = PlaceHolder(index)
 						index = index + 1
 						(List(tree), result)
