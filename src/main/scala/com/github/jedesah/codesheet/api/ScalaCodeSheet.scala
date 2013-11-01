@@ -150,10 +150,14 @@ object ScalaCodeSheet {
 		def userRepr: String
 		def valueOption: Option[Any]
 	}
-	case class ExceptionResult(ex: Exception) extends ValueResult {
+	case class ExceptionResult(ex: Throwable) extends ValueResult {
 		def userRepr = "throws " + ex
 		def valueOption = Some(ex)
 	}
+	/**
+	 * Marker to indicate that the object within was thrown by the user code
+	 */
+	case class WasThrown(ex: Throwable)
 	case object NotImplementedResult extends ValueResult {
 		def userRepr = "???"
 		def valueOption = Some(new NotImplementedError())
@@ -202,7 +206,7 @@ object ScalaCodeSheet {
 			val ifResult = IfThenElseResult(condResult.get.asInstanceOf[ExpressionResult], thenResult.get.asInstanceOf[ExpressionResult], elseResult.get.asInstanceOf[ExpressionResult], AST.pos.line)
 			(If(condTree.head, thenTree.head, elseTree.head), ifResult)
 		}
-		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Block], DefDefResult)] = {
+		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Try], DefDefResult)] = {
 			AST.sampleParamsOption(classDefs) map { sampleValues =>
 				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
 				// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
@@ -210,8 +214,9 @@ object ScalaCodeSheet {
 				val block = rhsTrees.headOption.map { rhsTree =>
 					Block(sampleValues, rhsTree)
 				}
+				val try_ = block.map(Try(_, List(CaseDef(Ident(nme.WILDCARD), EmptyTree, Literal(Constant(())))), EmptyTree))
 				val defDefResult = DefDefResult(AST.name.toString, paramList(sampleValues), None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
-				(block, defDefResult)
+				(try_, defDefResult)
 			}
 		}
 		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef]): (Block, BlockResult) = {
@@ -290,16 +295,20 @@ object ScalaCodeSheet {
 				case EmptyTree => (Nil, None)
 				case expr => {
 					val steps = Nil
-					val (trees, valueResult) = if (expr.equalsStructure(notImplSymbol)) (Nil, NotImplementedResult)
-					else {
-						val tempVal = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), expr)
-						val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(Literal(Constant(index)), Ident(newTermName(nameOfTemp))))
-						val refA = Ident(newTermName(nameOfTemp))
-						val tree = Block(List(tempVal, storeInMap), refA)
-						val result = PlaceHolder(index)
-						index = index + 1
-						(List(tree), result)
-					}
+					val (trees, valueResult) =
+						if (expr.equalsStructure(notImplSymbol)) (Nil, NotImplementedResult)
+						else {
+							val tempVal = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), expr)
+							val indexLit = Literal(Constant(index))
+							val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Ident(newTermName(nameOfTemp))))
+							val refA = Ident(newTermName(nameOfTemp))
+							val evalAndStore:Block = Block(List(tempVal, storeInMap), refA)
+							val refWasThrown = reify { WasThrown }.tree
+							val tree = Try(evalAndStore, List(CaseDef(Bind(newTermName("ex"), Ident(nme.WILDCARD)), EmptyTree, Block(List(Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Apply(refWasThrown, List(Ident(newTermName("ex"))))))), Throw(Ident(newTermName("ex")))))), EmptyTree)
+							val result = PlaceHolder(index)
+							index = index + 1
+							(List(tree), result)
+						}
 					(trees, Some(SimpleExpressionResult(final_ = valueResult, steps = steps, line = AST.pos.line)))
 				}
 			}
@@ -328,7 +337,10 @@ object ScalaCodeSheet {
 			toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Any]]
 		}
 		val statementResults = statementResultsWithPlaceHolders.map(_.transform {
-			case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) => placeholderValues.get(id).map { value => simple.copy(final_ = value) }.getOrElse(simple)
+			case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) => placeholderValues.get(id).map {
+				case WasThrown(throwable) => simple.copy(final_ = ExceptionResult(throwable))
+				case value => simple.copy(final_ = value)
+			}.getOrElse(simple)
 		})
 		Result(statementResults, outputStream.toString)
 	} catch {
