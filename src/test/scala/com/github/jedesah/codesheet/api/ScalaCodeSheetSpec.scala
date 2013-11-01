@@ -1284,26 +1284,72 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 		}
 		"???" in {
-			"value definition" in {
-				val code = "val a = ???"
-				computeResults(code, false) must beLike { case Result(List(ValDefResult("a", None, rhs, 1)), "") =>
-					rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
-				}
-			}
-			"function definition" in {
-				"no params" in {
-					val code = "def gog = ???"
-					computeResults(code, false) must beLike { case Result(List(DefDefResult("gog", Nil, None, rhs, 1)), "") =>
+			"simple definitions" in {
+				"value definition" in {
+					val code = "val a = ???"
+					computeResults(code, false) must beLike { case Result(List(ValDefResult("a", None, rhs, 1)), "") =>
 						rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 					}
 				}
-				"with params" in {
-					val code = "def gogg(a: Int) = ???"
-					computeResults(code, false) must beLike { case Result(List(DefDefResult("gogg", params, None, rhs, 1)), "") =>
-						params must beLike { case List(param) =>
-							structureEquals(param, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+				"function definition" in {
+					"no params" in {
+						val code = "def gog = ???"
+						computeResults(code, false) must beLike { case Result(List(DefDefResult("gog", Nil, None, rhs, 1)), "") =>
+							rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 						}
-						rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
+					}
+					"with params" in {
+						val code = "def gogg(a: Int) = ???"
+						computeResults(code, false) must beLike { case Result(List(DefDefResult("gogg", params, None, rhs, 1)), "") =>
+							params must beLike { case List(param) =>
+								structureEquals(param, AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(3))))
+							}
+							rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
+						}
+					}
+				}
+			}
+			"complex scenarios" in {
+				"unimplemented value definition with later use" in {
+					"1" in {
+						val code = """val a: Int = ???
+									 |val b = a""".stripMargin
+						computeResults(code, false) must beLike { case Result(List(a, b), "") =>
+							a ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
+							b ==== SimpleExpressionResult(NotImplementedResult, Nil, 2)
+						}
+					}
+					"2" in {
+						val code = """val a: Int = ???
+									 |val b = a * 2""".stripMargin
+						computeResults(code, false) must beLike { case Result(List(a, b), "") =>
+							a ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
+							b ==== SimpleExpressionResult(NotImplementedResult, Nil, 2)
+						}
+					}
+				}
+				"unimplemented function definition with later use" in {
+					val code = """def a: Int = ???
+								 |val b = a * 2""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(a, b), "") =>
+						a ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
+						b ==== SimpleExpressionResult(NotImplementedResult, Nil, 2)
+					}
+				}
+			}
+		}
+		"exceptions" in {
+			"simple exceptional value definition" in {
+				val code = "val a = 10 / 0"
+				computeResults(code, false) must beLike { case Result(List(a), "") =>
+					a ==== SimpleExpressionResult(ExceptionResult(new java.lang.ArithmeticException("/ by zero")), Nil, 1)
+				}
+			}
+			"simple exceptional function definition" in {
+				val code = "def a = 10 / 0"
+				computeResults(code, false) must beLike { case Result(List(a), "") =>
+					a must beLike { case DefDefResult("a", Nil, None, SimpleExpressionResult(ExceptionResult(ex), Nil, 1), 1) =>
+						ex must beLike { case ex: java.lang.ArithmeticException => ex.getMessage ==== "/ by zero" }
 					}
 				}
 			}
