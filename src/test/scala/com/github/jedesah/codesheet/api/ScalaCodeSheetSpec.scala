@@ -1338,14 +1338,14 @@ class ScalaCodeSheetSpec extends Specification {
 				}
 			}
 		}
-		"exceptions" in {
-			"simple exceptional value definition" in {
+		"throws an exception" in {
+			"value definition" in {
 				val code = "val a = 10 / 0"
 				computeResults(code, false) must beLike { case Result(List(a), "") =>
 					a ==== SimpleExpressionResult(ExceptionResult(new java.lang.ArithmeticException("/ by zero")), Nil, 1)
 				}
 			}
-			"simple exceptional function definition" in {
+			"function definition" in {
 				val code = "def a = 10 / 0"
 				computeResults(code, false) must beLike { case Result(List(a), "") =>
 					a must beLike { case DefDefResult("a", Nil, None, SimpleExpressionResult(ExceptionResult(ex), Nil, 1), 1) =>
