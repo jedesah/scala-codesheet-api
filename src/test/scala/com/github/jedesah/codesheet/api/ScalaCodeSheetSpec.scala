@@ -1358,14 +1358,17 @@ class ScalaCodeSheetSpec extends Specification {
 			"simple" in {
 				val code = """import scala.util.Random
 				             |if (Random.nextBoolean) 10 else 10""".stripMargin
-				computeResults(code, false) ==== Result(List(SimpleExpressionResult(10, Nil, 2)), "")
-			}.pendingUntilFixed("I think this has to do with the symbols change I made a little while ago")
+				computeResults(code, false) must beLike { case Result(List(IfThenElseResult(_, then, else_, 2)), "") =>
+					then ==== SimpleExpressionResult(10, Nil, 2)
+					else_ ==== SimpleExpressionResult(10, Nil, 2)
+				}
+			}
 			"relative" in {
 				val code = """import scala._
 				             |import util.Random
 				             |if (Random.nextBoolean) 10 else 10""".stripMargin
 				computeResults(code, false) ==== Result(List(SimpleExpressionResult(10, Nil, 3)), "")
-			}.pendingUntilFixed
+			}.pendingUntilFixed("There is a bug in the reflection compiler. It does not support relative imports. See: https://issues.scala-lang.org/browse/SI-6393")
 		}
 		"mutability" in {
 			"println" in {

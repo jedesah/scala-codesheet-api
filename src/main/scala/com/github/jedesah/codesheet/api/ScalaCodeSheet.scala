@@ -292,6 +292,7 @@ object ScalaCodeSheet {
 					val (block, moduleDefResult) = evaluateModuleDef(moduleDef, classDefs)
 					(List(moduleDef, block), Some(moduleDefResult))
 				}
+				case import_ : Import => (List(import_), None)
 				case EmptyTree => (Nil, None)
 				case expr => {
 					val steps = Nil
