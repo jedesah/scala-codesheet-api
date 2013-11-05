@@ -1407,5 +1407,12 @@ class ScalaCodeSheetSpec extends Specification {
 				output ==== "Yo!\nHello World!\n"
 			}
 		}
+		"dependencies" in {
+			val code = """import com.github.nscala_time.time.Imports._
+						 |DateTime.nextMonth > DateTime.now""".stripMargin
+			computeResults(code, false) must beLike { case Result(List(expr), "") =>
+				expr ==== SimpleExpressionResult(true, Nil, line = 2)
+			}
+		}
 	}
 }

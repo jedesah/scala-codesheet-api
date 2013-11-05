@@ -15,6 +15,8 @@ licenses += ("GPL-3.0", url("http://www.gnu.org/copyleft/gpl.html"))
 
 libraryDependencies += "org.scala-lang" % "scala-compiler" % scalaVersion.value
 
+libraryDependencies += "com.github.nscala-time" %% "nscala-time" % "0.6.0"
+
 libraryDependencies += "org.specs2" %% "specs2" % "2.2.3" % "test"
 
 jacoco.settings
