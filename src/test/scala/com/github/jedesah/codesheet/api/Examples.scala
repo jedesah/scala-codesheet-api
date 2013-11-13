@@ -26,10 +26,9 @@ class Examples extends Specification {
 				computeResults(code) must beLike { case Result(List(defDef), "") =>
 					defDef must beLike { case DefDefResult("quickSort", List(param), None, body, 1) =>
 						structureEquals(param, AssignOrNamedArg(Ident(newTermName("list")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
-						body must beLike { case IfThenElseResult(cond, then, else_, 2) =>
+						body must beLike { case IfThenElseResult(cond, executed, 2) =>
 							cond ==== SimpleExpressionResult(false, Nil, line = 2)
-							then ==== SimpleExpressionResult(Nil, Nil, line = 2)
-							else_ must beLike { case BlockResult(List(smaller, larger, expr), 3) =>
+							executed must beLike { case BlockResult(List(smaller, larger, expr), 3) =>
 								smaller ==== ValDefResult("smaller", None, SimpleExpressionResult(Nil, Nil, line = 4), line = 4)
 								larger ==== ValDefResult("larger", None, SimpleExpressionResult(List(5,7), Nil, line = 5), line = 5)
 								expr ==== SimpleExpressionResult(List(3,5,7), Nil, line = 6)

@@ -35,12 +35,14 @@ object ScalaCodeSheet {
 	abstract class StatementResult(val line: Int) {
 		def userRepr: String
 		protected def asParamList(params: List[AssignOrNamedArg]) = params.mkStringNoEndsIfEmpty("(", ", ", ")")
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): StatementResult
+		def transform(pf: PartialFunction[StatementResult, StatementResult]): StatementResult = {
+			val sub = transformChildren(pf)
+			pf.applyOrElse(sub, identity[StatementResult])
+		}
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]): StatementResult
 		def value: Option[Any]
 	}
-	abstract class ExpressionResult(override val line: Int) extends StatementResult(line) {
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): ExpressionResult
-	}
+	abstract class ExpressionResult(override val line: Int) extends StatementResult(line)
 	case class BlockResult(children: List[StatementResult], override val line: Int) extends ExpressionResult(line) {
 		def userRepr = userRepr(Nil)
 		def userRepr(implementedMembers: List[ValOrDefDef]): String = {
@@ -56,10 +58,6 @@ object ScalaCodeSheet {
 				else s"{$childRepr}"
 			}
 		}
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): BlockResult = {
-			val sub = transformChildren(pf)
-			pf.applyOrElse(sub, identity[StatementResult]).asInstanceOf[BlockResult]
-		}
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(children = children.map(_.transform(pf)))
 		def value = children.last.value
 	}
@@ -68,34 +66,30 @@ object ScalaCodeSheet {
 			val lineDiff = rhs.line - line
 			name + inferredType.map(": " + _).getOrElse("") + " =" + "\n" * lineDiff + (if(lineDiff > 0) "\t" else " ") + rhs.userRepr
 		}
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): ValDefResult = {
-			val sub = transformChildren(pf)
-			pf.applyOrElse(sub, identity[StatementResult]).asInstanceOf[ValDefResult]
-		}
-		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(rhs = rhs.transform(pf))
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(rhs = rhs.transform(pf).asInstanceOf[ExpressionResult])
 		def value = Some(())
 	}
-	case class IfThenElseResult(cond: ExpressionResult, then: ExpressionResult, else_ : ExpressionResult, override val line: Int) extends ExpressionResult(line) {
+	private case class IfThenElseResultPlaceholder(cond: ExpressionResult, then: ExpressionResult, else_ : ExpressionResult, override val line: Int) extends ExpressionResult(line) {
 		def value = if(isTrue) then.value else else_.value
 		def isTrue = cond.value.get.asInstanceOf[Boolean]
 		def userRepr = if (isTrue) "then => " + then.userRepr else "else => " + else_.userRepr
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): IfThenElseResult = {
-			val sub = transformChildren(pf)
-			pf.applyOrElse(sub, identity[StatementResult]).asInstanceOf[IfThenElseResult]
-		}
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = {
-			val newCond = cond.transform(pf)
-			if (newCond.value.get.asInstanceOf[Boolean]) copy(cond = newCond, then = then.transform(pf))
-			else copy(cond = newCond, else_ = else_.transform(pf))
+			val newCond = cond.transform(pf).asInstanceOf[ExpressionResult]
+			if (newCond.value.get.asInstanceOf[Boolean]) copy(cond = newCond, then = then.transform(pf).asInstanceOf[ExpressionResult])
+			else copy(cond = newCond, else_ = else_.transform(pf).asInstanceOf[ExpressionResult])
+		}
+	}
+	case class IfThenElseResult(cond: ExpressionResult, executed: ExpressionResult, override val line: Int) extends ExpressionResult(line) {
+		def value = executed.value
+		def isTrue = cond.value.get.asInstanceOf[Boolean]
+		def userRepr = (if (isTrue) "then => " else "else => ") + executed.userRepr
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = {
+			copy(cond = cond.transform(pf).asInstanceOf[ExpressionResult], executed = executed.transform(pf).asInstanceOf[ExpressionResult])
 		}
 	}
 	case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], rhs: ExpressionResult, override val line: Int) extends StatementResult(line) {
 		def userRepr = name + asParamList(params) + inferredType.map(": " + _).getOrElse("") + " => " + rhs.userRepr
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): DefDefResult = {
-			val sub = transformChildren(pf)
-			pf.applyOrElse(sub, identity[StatementResult]).asInstanceOf[DefDefResult]
-		}
-		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(rhs = rhs.transform(pf))
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(rhs = rhs.transform(pf).asInstanceOf[ExpressionResult])
 		def value = Some(())
 	}
 	class ClassDefResult(val name: String, val params: List[AssignOrNamedArg], val body: BlockResult, override val line: Int) extends StatementResult(line) {
@@ -103,11 +97,7 @@ object ScalaCodeSheet {
 		def userRepr = "class " + name + asParamList(params) + (if (bodyRepr.isEmpty) "" else " " + bodyRepr)
 		override def equals(other: Any) = other match { case classDefResult: ClassDefResult => equals(classDefResult) case _ => false }
 		def equals(classDefResult: ClassDefResult) = name == classDefResult.name && params == classDefResult.params && body == classDefResult.body && line == classDefResult.line
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): ClassDefResult = {
-			val sub = transformChildren(pf)
-			pf.applyOrElse(sub, identity[StatementResult]).asInstanceOf[ClassDefResult]
-		}
-		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(body = body.transform(pf))
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(body = body.transform(pf).asInstanceOf[BlockResult])
 		def copy(name: String = name, params: List[AssignOrNamedArg] = params, body: BlockResult = body, line: Int = line) = ClassDefResult(name, params, body, line)
 		def value = Some(())
 	}
@@ -125,25 +115,18 @@ object ScalaCodeSheet {
 			val bodyString = body.userRepr
 			if (bodyString.isEmpty) "" else name + " " + bodyString
 		}
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): ModuleDefResult = {
-			val sub = transformChildren(pf)
-			pf.applyOrElse(sub, identity[StatementResult]).asInstanceOf[ModuleDefResult]
-		}
-		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(body = body.transform(pf))
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(body = body.transform(pf).asInstanceOf[BlockResult])
 		def value = Some(())
 	}
-	case class SimpleExpressionResult(final_ : ValueResult, steps: List[Tree] = Nil, override val line: Int) extends ExpressionResult(line) {
+	trait NoChildren extends StatementResult {
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]): StatementResult = this
+	}
+	case class SimpleExpressionResult(final_ : ValueResult, steps: List[Tree] = Nil, override val line: Int) extends ExpressionResult(line) with NoChildren {
 		def userRepr = (steps.map(_.prettyPrint) :+ final_.userRepr).mkString(" => ")
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): SimpleExpressionResult = {
-			pf.applyOrElse(this, identity[StatementResult]).asInstanceOf[SimpleExpressionResult]
-		}
 		def value = final_.valueOption
 	}
-	case class CompileErrorResult(message: String, override val line: Int) extends StatementResult(line) {
+	case class CompileErrorResult(message: String, override val line: Int) extends StatementResult(line) with NoChildren {
 		def userRepr = message
-		def transform(pf: PartialFunction[StatementResult, StatementResult]): CompileErrorResult = {
-			pf.applyOrElse(this, identity[StatementResult]).asInstanceOf[CompileErrorResult]
-		}
 		def value = None
 	}
 	trait ValueResult {
@@ -199,11 +182,11 @@ object ScalaCodeSheet {
 			val result = ValDefResult(AST.lhs.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
 			(assign, result)
 		}
-		def evaluateIf(AST: If, classDefs: Traversable[ClassDef]): (If, IfThenElseResult) = {
+		def evaluateIf(AST: If, classDefs: Traversable[ClassDef]): (If, IfThenElseResultPlaceholder) = {
 			val (thenTree, thenResult) = evaluateImpl(AST.thenp, classDefs)
 			val (elseTree, elseResult) = evaluateImpl(AST.elsep, classDefs)
 			val (condTree, condResult) = evaluateImpl(AST.cond, classDefs)
-			val ifResult = IfThenElseResult(condResult.get.asInstanceOf[ExpressionResult], thenResult.get.asInstanceOf[ExpressionResult], elseResult.get.asInstanceOf[ExpressionResult], AST.pos.line)
+			val ifResult = IfThenElseResultPlaceholder(condResult.get.asInstanceOf[ExpressionResult], thenResult.get.asInstanceOf[ExpressionResult], elseResult.get.asInstanceOf[ExpressionResult], AST.pos.line)
 			(If(condTree.head, thenTree.head, elseTree.head), ifResult)
 		}
 		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Try], DefDefResult)] = {
@@ -297,7 +280,7 @@ object ScalaCodeSheet {
 				case expr => {
 					val steps = Nil
 					val (trees, valueResult) =
-						if (expr.equalsStructure(notImplSymbol)) (Nil, NotImplementedResult)
+						if (expr.equalsStructure(notImplSymbol)) (List(expr), NotImplementedResult)
 						else {
 							val tempVal = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), expr)
 							val indexLit = Literal(Constant(index))
@@ -337,11 +320,22 @@ object ScalaCodeSheet {
 		val placeholderValues = Console.withOut(outputStream) {
 			toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Any]]
 		}
+		// Take the results that were statically generated and update them now that we have the map that tells us
+		// what happened at runtime.
 		val statementResults = statementResultsWithPlaceHolders.map(_.transform {
+			// Extract values from the map and insert them in SimpleExpressionResult
 			case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) => placeholderValues.get(id).map {
+				// An exception was thrown while executing the code, reflect that in the new structure
 				case WasThrown(throwable) => simple.copy(final_ = ExceptionResult(throwable))
+				// The most common case
 				case value => simple.copy(final_ = value)
+			// If no value was found, just return the structure unchanged, it will probably get eliminated by the IfThenElse substitution
 			}.getOrElse(simple)
+			// We do not know in advance which branch will be executed, but now we know, so update the structure to reflect this
+			case result @IfThenElseResultPlaceholder(cond, then, else_, line) => {
+				val executed = if (result.isTrue) then else else_
+				IfThenElseResult(cond, executed, line)
+			}
 		})
 		Result(statementResults, outputStream.toString)
 	} catch {
