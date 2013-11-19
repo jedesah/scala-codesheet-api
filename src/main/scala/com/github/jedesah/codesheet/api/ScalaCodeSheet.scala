@@ -14,6 +14,7 @@ object ScalaCodeSheet {
 
 	val nameOfMap = "youcannotnameyourvariablelikethisincodesheet_map"
 	val nameOfTemp = "youcannotnameyourvariablelikethisincodesheet_temp"
+	val nameOfClosuresMap = "youcannotnameyourvariablelikethisincodesheet_map_closure"
 
 	def childrenRepr(at: Int, elems: List[{ def line: Int; def userRepr: String}]): String =
 		elems.sortBy(_.line).foldLeft((at, "")) { case ((at, result), child) =>
@@ -163,6 +164,7 @@ object ScalaCodeSheet {
 	def analyseAndTransform(AST: Tree, enableSteps: Boolean): (Tree, List[StatementResult]) = {
 
 		var index = 0
+		var indexClosures = 0
 
 		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef]): (Option[ValDef], ValDefResult) = {
 			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
@@ -189,18 +191,24 @@ object ScalaCodeSheet {
 			val ifResult = IfThenElseResultPlaceholder(condResult.get.asInstanceOf[ExpressionResult], thenResult.get.asInstanceOf[ExpressionResult], elseResult.get.asInstanceOf[ExpressionResult], AST.pos.line)
 			(If(condTree.head, thenTree.head, elseTree.head), ifResult)
 		}
-		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Try], DefDefResult)] = {
-			AST.sampleParamsOption(classDefs) map { sampleValues =>
-				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
-				// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
-				// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
-				val block = rhsTrees.headOption.map { rhsTree =>
-					Block(sampleValues, rhsTree)
-				}
-				val try_ = block.map(Try(_, List(CaseDef(Ident(nme.WILDCARD), EmptyTree, Literal(Constant(())))), EmptyTree))
-				val defDefResult = DefDefResult(AST.name.toString, paramList(sampleValues), None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
-				(try_, defDefResult)
-			}
+		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): (List[Tree], DefDefResult) = {
+			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+			// The Scala AST does not type it, but you can only have an expression as a rhs of a DefDef
+			// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
+			val trees = rhsTrees.headOption.map { rhsTree =>
+				val fundef = DefDef(AST.mods, AST.name, AST.tparams, AST.vparamss, AST.tpt, rhsTree)
+				// A function definition can have curried arguments, but we don't care about that, we can flatten them all together
+				val params = AST.vparamss.flatten
+				val rhsOfFun = if (params.isEmpty) Ident(AST.name) else Apply(Ident(AST.name), params.map( param => Ident(param.name)))
+				val closedFun = Function(params, rhsOfFun)
+				val indexLit = Literal(Constant(indexClosures))
+				val storeInMap = Apply(Select(Ident(newTermName(nameOfClosuresMap)), newTermName("update")), List(indexLit, closedFun))
+				indexClosures = indexClosures + 1
+				List(fundef, storeInMap)
+			}.getOrElse(Nil)
+			// TODO: Nil is a not a good value here, it's just to get things off the ground, replace with placeholders that can be swapped after executing the code
+			val defDefResult = DefDefResult(AST.name.toString, Nil, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
+			(trees, defDefResult)
 		}
 		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef]): (Block, BlockResult) = {
 			val (trees, results) = evaluateList(AST.children, classDefs)
@@ -258,9 +266,8 @@ object ScalaCodeSheet {
 					(newValDefOption.toList	, Some(valDefResult))
 				}
 				case funDef: DefDef => {
-					evaluateDefDef(funDef, classDefs).map { case (blockOption, defDefResult) =>
-						(funDef :: blockOption.toList, Some(defDefResult))
-					} getOrElse (List(funDef), None)
+					val (trees, defDefResult) = evaluateDefDef(funDef, classDefs)
+					(trees, Some(defDefResult))
 				}
 				case block: Block => {
 					val (newblock, blockResult) = evaluateBlock(block, classDefs)
@@ -287,8 +294,9 @@ object ScalaCodeSheet {
 							val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Ident(newTermName(nameOfTemp))))
 							val refA = Ident(newTermName(nameOfTemp))
 							val evalAndStore:Block = Block(List(tempVal, storeInMap), refA)
-							val refWasThrown = reify { WasThrown }.tree
-							val tree = Try(evalAndStore, List(CaseDef(Bind(newTermName("ex"), Ident(nme.WILDCARD)), EmptyTree, Block(List(Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Apply(refWasThrown, List(Ident(newTermName("ex"))))))), Throw(Ident(newTermName("ex")))))), EmptyTree)
+							//val refWasThrown = reify { WasThrown }.tree
+							val refWasThrown = Select(Select(Select(Select(Select(Select(Ident(newTermName("com")), newTermName("github")), newTermName("jedesah")), newTermName("codesheet")), newTermName("api")), newTermName("ScalaCodeSheet")), newTermName("WasThrown"))
+							val tree = Try(evalAndStore, List(CaseDef(Bind(newTermName("ex"), Typed(Ident(nme.WILDCARD), Ident(newTypeName("Throwable")))), EmptyTree, Block(List(Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Apply(refWasThrown, List(Ident(newTermName("ex"))))))), Throw(Ident(newTermName("ex")))))), EmptyTree)
 							val result = PlaceHolder(index)
 							index = index + 1
 							(List(tree), result)
@@ -298,8 +306,11 @@ object ScalaCodeSheet {
 			}
 		}
 
-		val beginMap =  ValDef(Modifiers(), newTermName(nameOfMap), TypeTree(), Apply(TypeApply(Select(Select(Select(Ident(newTermName("scala")), newTermName("collection")), newTermName("mutable")), newTermName("Map")), List(Ident(newTypeName("Int")), Ident(newTypeName("Any")))), List()))
-		val retrieveMap = Ident(newTermName(nameOfMap))
+		val beginMapValues =  ValDef(Modifiers(), newTermName(nameOfMap), TypeTree(), Apply(TypeApply(Select(Select(Select(Ident(newTermName("scala")), newTermName("collection")), newTermName("mutable")), newTermName("Map")), List(Ident(newTypeName("Int")), Ident(newTypeName("Any")))), List()))
+		val beginMapClosures = ValDef(Modifiers(), newTermName(nameOfClosuresMap), TypeTree(), Apply(TypeApply(Select(Select(Select(Ident(newTermName("scala")), newTermName("collection")), newTermName("mutable")), newTermName("Map")), List(Ident(newTypeName("Int")), Ident(newTypeName("AnyRef")))), List()))
+		val retrieveMapValues = Ident(newTermName(nameOfMap))
+		val retrieveMapClosures = Ident(newTermName(nameOfClosuresMap))
+		val retrieveMaps = Apply(Select(Ident("scala"), newTermName("Tuple2")), List(retrieveMapValues, retrieveMapClosures))
 
 		val (trees, results) = AST match {
 			case block: Block if block.pos == NoPosition => evaluateList(block.children, Nil)
@@ -309,7 +320,7 @@ object ScalaCodeSheet {
 			}
 		}
 
-		(Block(beginMap :: trees, retrieveMap), results)
+		(Block(beginMapValues :: beginMapClosures :: trees, retrieveMaps), results)
 	}
 
 	def computeResults(code: String, enableSteps: Boolean = true): Result = try {
@@ -317,8 +328,19 @@ object ScalaCodeSheet {
 		val AST = toolBox.parse(code)
 		val (instrumented, statementResultsWithPlaceHolders) = analyseAndTransform(AST, enableSteps = enableSteps)
 		val outputStream = new java.io.ByteArrayOutputStream()
-		val placeholderValues = Console.withOut(outputStream) {
-			toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Any]]
+		val (placeholderValues, closures) = Console.withOut(outputStream) {
+			import scala.collection.mutable.Map
+			toolBox.eval(instrumented).asInstanceOf[(Map[Int, Any], Map[Int, AnyRef])]
+		}
+		// This is a huge hack but it demontrates that the closures can be called and they work
+		// TODO: Change this to use reflection to call these functions
+		closures.values.foreach { closure =>
+			try {
+				closure.asInstanceOf[Function0[_]]()
+			}
+			catch {
+				case _: Throwable =>
+			}
 		}
 		// Take the results that were statically generated and update them now that we have the map that tells us
 		// what happened at runtime.
