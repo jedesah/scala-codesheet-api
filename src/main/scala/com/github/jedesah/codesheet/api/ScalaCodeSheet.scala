@@ -137,10 +137,6 @@ object ScalaCodeSheet {
 		def userRepr = "throws " + ex
 		def valueOption = Some(ex)
 	}
-	/**
-	 * Marker to indicate that the object within was thrown by the user code
-	 */
-	case class WasThrown(ex: Throwable)
 	case object NotImplementedResult extends ValueResult {
 		def userRepr = "???"
 		def valueOption = Some(new NotImplementedError())
@@ -163,6 +159,8 @@ object ScalaCodeSheet {
 	def analyseAndTransform(AST: Tree, enableSteps: Boolean): (Tree, List[StatementResult]) = {
 
 		var index = 0
+
+		def wrapInTry(toWrap: Tree): Tree = Apply(Select(Select(Ident(newTermName("scala")), newTermName("util")), newTermName("Try")), List(toWrap))
 
 		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef]): (Option[ValDef], ValDefResult) = {
 			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
@@ -282,16 +280,17 @@ object ScalaCodeSheet {
 					val (trees, valueResult) =
 						if (expr.equalsStructure(notImplSymbol)) (List(expr), NotImplementedResult)
 						else {
-							val tempVal = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), expr)
-							val indexLit = Literal(Constant(index))
-							val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Ident(newTermName(nameOfTemp))))
-							val refA = Ident(newTermName(nameOfTemp))
-							val evalAndStore:Block = Block(List(tempVal, storeInMap), refA)
-							val refWasThrown = reify { WasThrown }.tree
-							val tree = Try(evalAndStore, List(CaseDef(Bind(newTermName("ex"), Ident(nme.WILDCARD)), EmptyTree, Block(List(Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Apply(refWasThrown, List(Ident(newTermName("ex"))))))), Throw(Ident(newTermName("ex")))))), EmptyTree)
+							// We create a temporary value to store the result of the expression
+							// We wrap the rhs in a Try monad to detect exceptions
+							val tempVal = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), wrapInTry(expr))
+							val indexLiteral = Literal(Constant(index))
+							val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLiteral, Ident(newTermName(nameOfTemp))))
+							// We extract the actual value from the monad to preserve original program flow
+							val extract = Select(Ident(newTermName(nameOfTemp)), newTermName("get"))
+							val evalAndStore = Block(List(tempVal, storeInMap), extract)
 							val result = PlaceHolder(index)
 							index = index + 1
-							(List(tree), result)
+							(List(evalAndStore), result)
 						}
 					(trees, Some(SimpleExpressionResult(final_ = valueResult, steps = steps, line = AST.pos.line)))
 				}
@@ -317,20 +316,22 @@ object ScalaCodeSheet {
 		val AST = toolBox.parse(code)
 		val (instrumented, statementResultsWithPlaceHolders) = analyseAndTransform(AST, enableSteps = enableSteps)
 		val outputStream = new java.io.ByteArrayOutputStream()
-		val placeholderValues = Console.withOut(outputStream) {
-			toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Any]]
+		import scala.util.{Try, Success}
+		val values = Console.withOut(outputStream) {
+			toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Try[Any]]]
 		}
 		// Take the results that were statically generated and update them now that we have the map that tells us
 		// what happened at runtime.
 		val statementResults = statementResultsWithPlaceHolders.map(_.transform {
-			// Extract values from the map and insert them in SimpleExpressionResult
-			case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) => placeholderValues.get(id).map {
-				// An exception was thrown while executing the code, reflect that in the new structure
-				case WasThrown(throwable) => simple.copy(final_ = ExceptionResult(throwable))
-				// The most common case
-				case value => simple.copy(final_ = value)
-			// If no value was found, just return the structure unchanged, it will probably get eliminated by the IfThenElse substitution
-			}.getOrElse(simple)
+			// Extract values from the map and insert them in SimpleExpressionResults
+			case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) =>
+				values.get(id).map { value =>
+					simple.copy(final_ = value.transform(
+						value => Success(ObjectResult(value)),
+						exception => Success(ExceptionResult(exception))
+					).get)
+				}.getOrElse(simple) // If no value was found, just return the structure unchanged,
+									// it will probably get eliminated by the IfThenElse substitution
 			// We do not know in advance which branch will be executed, but now we know, so update the structure to reflect this
 			case result @IfThenElseResultPlaceholder(cond, then, else_, line) => {
 				val executed = if (result.isTrue) then else else_
