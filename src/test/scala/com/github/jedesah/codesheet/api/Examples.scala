@@ -23,7 +23,7 @@ class Examples extends Specification {
 	        				 |		quickSort(smaller) ++ (list.head :: quickSort(larger))
 	    					 |	}
 							 |}""".stripMargin
-				computeResults(code) must beLike { case Result(List(defDef), "") =>
+				computeResults(code) must beLike { case StandardResult(List(defDef), "") =>
 					defDef must beLike { case DefDefResult("quickSort", List(param), None, body, 1) =>
 						structureEquals(param, AssignOrNamedArg(Ident(newTermName("list")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
 						body must beLike { case IfThenElseResult(cond, executed, 2) =>

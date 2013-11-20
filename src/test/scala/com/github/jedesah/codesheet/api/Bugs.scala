@@ -15,7 +15,7 @@ class Bugs extends Specification {
 					|val c = true
 					|List(a,b,c)
 				  """.stripMargin
-				computeResults(code, enableSteps = false) must beLike { case Result(List(a, b, c, expr), "") =>
+				computeResults(code, enableSteps = false) must beLike { case StandardResult(List(a, b, c, expr), "") =>
 					a ==== ValDefResult("a", None, SimpleExpressionResult(3, Nil, 1), 1)
 					b ==== ValDefResult("b", None, SimpleExpressionResult('f', Nil, 2), 2)
 					c ==== ValDefResult("c", None, SimpleExpressionResult(true, Nil, 3), 3)
@@ -24,7 +24,7 @@ class Bugs extends Specification {
 			}
 			"AnyVal" in {
 				val code = "def foo(a: AnyVal, b: AnyVal, c: AnyVal) = List(a,b,c)"
-				computeResults(code, enableSteps = false) must beLike { case Result(List(foo), "") =>
+				computeResults(code, enableSteps = false) must beLike { case StandardResult(List(foo), "") =>
 					foo must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
 						ok
 					}
@@ -38,7 +38,7 @@ class Bugs extends Specification {
 				val start = ValDefResult("a", None, SimpleExpressionResult(Map(), Nil, line = 1), line = 1)
 				val object_ = ModuleDefResult("A", BlockResult(List(SimpleExpressionResult(true, Nil, line = 4)), line = 3), line = 3)
 				val end = SimpleExpressionResult(Map(), Nil, line = 7)
-				val result = Result(List(start, object_, end), "")
+				val result = StandardResult(List(start, object_, end), "")
 				"userRepr" in {
 					val expected = """a = Map()
 									 |

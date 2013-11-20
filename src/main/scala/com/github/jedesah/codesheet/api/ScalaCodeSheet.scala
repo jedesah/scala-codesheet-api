@@ -12,8 +12,9 @@ import com.github.jedesah.AugmentedCollections._
 
 object ScalaCodeSheet {
 
-	val nameOfMap = "youcannotnameyourvariablelikethisincodesheet_map"
-	val nameOfTemp = "youcannotnameyourvariablelikethisincodesheet_temp"
+	val reservedName = "youcannotnameyourvariablelikethisincodesheet"
+	val nameOfMap = reservedName + "_map"
+	val nameOfTemp = reservedName + "_temp"
 
 	def childrenRepr(at: Int, elems: List[{ def line: Int; def userRepr: String}]): String =
 		elems.sortBy(_.line).foldLeft((at, "")) { case ((at, result), child) =>
@@ -27,9 +28,15 @@ object ScalaCodeSheet {
 				if (singleChild.isEmpty) ""
 				else if (!singleChild.contains("\n")) " " + singleChild
 				else singleChild.tabulate}*/
-
-	case class Result(subResults: List[StatementResult], output: String) {
+	abstract class Result {
+		val output: String
+		def userRepr: String
+	}
+	case class StandardResult(subResults: List[StatementResult], override val output: String) extends Result {
 		def userRepr = childrenRepr(1, subResults.asInstanceOf[List[{ def line: Int; def userRepr: String}]])
+	}
+	case class ExceptionResult(exception: Throwable, override val output: String) extends Result {
+		def userRepr = s"throws $exception"
 	}
 
 	abstract class StatementResult(val line: Int) {
@@ -133,7 +140,7 @@ object ScalaCodeSheet {
 		def userRepr: String
 		def valueOption: Option[Any]
 	}
-	case class ExceptionResult(ex: Throwable) extends ValueResult {
+	case class ExceptionValue(ex: Throwable) extends ValueResult {
 		def userRepr = "throws " + ex
 		def valueOption = Some(ex)
 	}
@@ -162,34 +169,45 @@ object ScalaCodeSheet {
 
 		def wrapInTry(toWrap: Tree): Tree = Apply(Select(Select(Ident(newTermName("scala")), newTermName("util")), newTermName("Try")), List(toWrap))
 
-		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef]): (Option[ValDef], ValDefResult) = {
-			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef], topLevel: Boolean): (List[Tree], ValDefResult) = {
+			val topLevelGoingForward = topLevel && !AST.isVar
+			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, topLevelGoingForward)
 			// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
 			// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
-			val valDef = rhsTrees.headOption.map { rhsTree =>
-				ValDef(AST.mods, AST.name, TypeTree(), rhsTree)
-			}
+			val trees = rhsTrees.headOption.map { rhsTree =>
+				if (topLevelGoingForward) {
+					val tempName = newTermName(reservedName + "_b_" + AST.name.toString)
+					val wrappedTemp = ValDef(Modifiers(), tempName, TypeTree(), rhsTree)
+					val asFunDef = DefDef(AST.mods, AST.name, List(), List(), AST.tpt, Select(Ident(tempName), newTermName("get")))
+					List(wrappedTemp, asFunDef)
+				}
+				else {
+					List(ValDef(AST.mods, AST.name, AST.tpt, rhsTree))
+				}
+			}.getOrElse(Nil)
 			val result = ValDefResult(AST.name.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
-			(valDef, result)
+			(trees, result)
 		}
 		def evaluateAssign(AST: Assign, classDefs: Traversable[ClassDef]): (Option[Assign], ValDefResult) = {
-			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false)
 			val assign = rhsTrees.headOption.map { rhsTree =>
 				Assign(AST.lhs, rhsTree)
 			}
 			val result = ValDefResult(AST.lhs.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
 			(assign, result)
 		}
-		def evaluateIf(AST: If, classDefs: Traversable[ClassDef]): (If, IfThenElseResultPlaceholder) = {
-			val (thenTree, thenResult) = evaluateImpl(AST.thenp, classDefs)
-			val (elseTree, elseResult) = evaluateImpl(AST.elsep, classDefs)
-			val (condTree, condResult) = evaluateImpl(AST.cond, classDefs)
+		def evaluateIf(AST: If, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, IfThenElseResultPlaceholder) = {
+			val (thenTree, thenResult) = evaluateImpl(AST.thenp, classDefs, false)
+			val (elseTree, elseResult) = evaluateImpl(AST.elsep, classDefs, false)
+			val (condTree, condResult) = evaluateImpl(AST.cond, classDefs, false)
 			val ifResult = IfThenElseResultPlaceholder(condResult.get.asInstanceOf[ExpressionResult], thenResult.get.asInstanceOf[ExpressionResult], elseResult.get.asInstanceOf[ExpressionResult], AST.pos.line)
-			(If(condTree.head, thenTree.head, elseTree.head), ifResult)
+			val ifTree = If(condTree.head, thenTree.head, elseTree.head)
+			val resultTree = if (topLevel) wrapInTry(ifTree) else ifTree
+			(resultTree, ifResult)
 		}
 		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Try], DefDefResult)] = {
 			AST.sampleParamsOption(classDefs) map { sampleValues =>
-				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false)
 				// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
 				// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
 				val block = rhsTrees.headOption.map { rhsTree =>
@@ -200,13 +218,16 @@ object ScalaCodeSheet {
 				(try_, defDefResult)
 			}
 		}
-		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef]): (Block, BlockResult) = {
-			val (trees, results) = evaluateList(AST.children, classDefs)
-			(Block(trees.init, trees.last), BlockResult(results, AST.pos.line))
+		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef], topLevel: Boolean): (Block, BlockResult) = {
+			val additionnalClassDefs = AST.children.collect { case child: ClassDef => child }
+			val (initTrees, results) = evaluateList(AST.children.init, classDefs, topLevel = false)
+			val (lastTrees, lastResult) = evaluateImpl(AST.children.last, classDefs, topLevel = topLevel)
+			val trees = initTrees ++ lastTrees
+			(Block(trees.init, trees.last), BlockResult(results ++ lastResult.toList, AST.pos.line))
 		}
-		def evaluateList(list: List[Tree], classDefs: Traversable[ClassDef]) : (List[Tree], List[StatementResult]) = {
+		def evaluateList(list: List[Tree], classDefs: Traversable[ClassDef], topLevel: Boolean) : (List[Tree], List[StatementResult]) = {
 			val additionnalClassDefs = list.collect { case child: ClassDef => child }
-			val (childTrees, childResults) = list.map(evaluateImpl(_, classDefs ++ additionnalClassDefs)).unzip
+			val (childTrees, childResults) = list.map(evaluateImpl(_, classDefs ++ additionnalClassDefs, topLevel)).unzip
 			(childTrees.flatten, childResults.flatten)
 		}
 		def evaluateClassDef(AST: ClassDef, classDefs: Traversable[ClassDef]): Option[(Option[Block], ClassDefResult)] = {
@@ -228,7 +249,7 @@ object ScalaCodeSheet {
 							case other => other != constructor
 						}
 						val sampleValues = sampleParams ++ implementedMembers
-						val (trees, results) = evaluateList(noAbstract, classDefs)
+						val (trees, results) = evaluateList(noAbstract, classDefs, false)
 						val classDefResult = ClassDefResult(AST.name.toString, paramList(sampleParams), BlockResult(results, line = AST.pos.line), line = AST.pos.line)
 						val blockOption = if (trees.isEmpty) None else Some(Block(sampleValues ++ trees, Literal(Constant(()))))
 						Some(blockOption, classDefResult)
@@ -238,21 +259,21 @@ object ScalaCodeSheet {
 		}
 		def evaluateModuleDef(AST: ModuleDef, classDefs: Traversable[ClassDef]): (Block, ModuleDefResult) = {
 			val body = AST.impl.body.filter(!isConstructor(_))
-			val (trees, results) = evaluateList(body, classDefs)
+			val (trees, results) = evaluateList(body, classDefs, false)
 			(Block(trees, Literal(Constant(()))), ModuleDefResult(AST.name.toString, BlockResult(results, line = AST.pos.line), line = AST.pos.line))
 		}
-		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef]): (List[Tree], Option[StatementResult]) = {
+		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef], topLevel: Boolean): (List[Tree], Option[StatementResult]) = {
 			AST match {
 				case assign: Assign => {
 					val (newAssignOption, valDefResult) = evaluateAssign(assign, classDefs)
 					(newAssignOption.toList, Some(valDefResult))
 				}
 				case ifTree: If => {
-					val (newIf, ifResult) = evaluateIf(ifTree, classDefs)
+					val (newIf, ifResult) = evaluateIf(ifTree, classDefs, topLevel)
 					(List(newIf), Some(ifResult))
 				}
 				case valDef: ValDef => {
-					val (newValDefOption, valDefResult) = evaluateValDef(valDef, classDefs)
+					val (newValDefOption, valDefResult) = evaluateValDef(valDef, classDefs, topLevel)
 					(newValDefOption.toList	, Some(valDefResult))
 				}
 				case funDef: DefDef => {
@@ -261,7 +282,7 @@ object ScalaCodeSheet {
 					} getOrElse (List(funDef), None)
 				}
 				case block: Block => {
-					val (newblock, blockResult) = evaluateBlock(block, classDefs)
+					val (newblock, blockResult) = evaluateBlock(block, classDefs, topLevel)
 					(List(newblock), Some(blockResult))
 				}
 				case classDef: ClassDef => {
@@ -282,12 +303,15 @@ object ScalaCodeSheet {
 						else {
 							// We create a temporary value to store the result of the expression
 							// We wrap the rhs in a Try monad to detect exceptions
-							val tempVal = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), wrapInTry(expr))
+							val tempName = newTermName(nameOfTemp)
+							val tempVal = ValDef(Modifiers(), tempName, TypeTree(), wrapInTry(expr))
 							val indexLiteral = Literal(Constant(index))
-							val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLiteral, Ident(newTermName(nameOfTemp))))
+							val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLiteral, Ident(tempName)))
 							// We extract the actual value from the monad to preserve original program flow
-							val extract = Select(Ident(newTermName(nameOfTemp)), newTermName("get"))
-							val evalAndStore = Block(List(tempVal, storeInMap), extract)
+							val ref = Ident(tempName)
+							val extract = Select(ref, newTermName("get"))
+							val lastExpr = if (topLevel) ref else extract
+							val evalAndStore = Block(List(tempVal, storeInMap), lastExpr)
 							val result = PlaceHolder(index)
 							index = index + 1
 							(List(evalAndStore), result)
@@ -301,9 +325,9 @@ object ScalaCodeSheet {
 		val retrieveMap = Ident(newTermName(nameOfMap))
 
 		val (trees, results) = AST match {
-			case block: Block if block.pos == NoPosition => evaluateList(block.children, Nil)
+			case block: Block if block.pos == NoPosition => evaluateList(block.children, Nil, topLevel = true)
 			case _ => {
-				val (trees, resultOption) = evaluateImpl(AST, Nil)
+				val (trees, resultOption) = evaluateImpl(AST, Nil, topLevel = true)
 				(trees, resultOption.toList)
 			}
 		}
@@ -316,34 +340,37 @@ object ScalaCodeSheet {
 		val AST = toolBox.parse(code)
 		val (instrumented, statementResultsWithPlaceHolders) = analyseAndTransform(AST, enableSteps = enableSteps)
 		val outputStream = new java.io.ByteArrayOutputStream()
-		import scala.util.{Try, Success}
-		val values = Console.withOut(outputStream) {
-			toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Try[Any]]]
-		}
-		// Take the results that were statically generated and update them now that we have the map that tells us
-		// what happened at runtime.
-		val statementResults = statementResultsWithPlaceHolders.map(_.transform {
-			// Extract values from the map and insert them in SimpleExpressionResults
-			case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) =>
-				values.get(id).map { value =>
-					simple.copy(final_ = value.transform(
-						value => Success(ObjectResult(value)),
-						exception => Success(ExceptionResult(exception))
-					).get)
-				}.getOrElse(simple) // If no value was found, just return the structure unchanged,
-									// it will probably get eliminated by the IfThenElse substitution
-			// We do not know in advance which branch will be executed, but now we know, so update the structure to reflect this
-			case result @IfThenElseResultPlaceholder(cond, then, else_, line) => {
-				val executed = if (result.isTrue) then else else_
-				IfThenElseResult(cond, executed, line)
+		try {
+			import scala.util.{Try, Success}
+			val values = Console.withOut(outputStream) {
+				toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Try[Any]]]
 			}
-		})
-		Result(statementResults, outputStream.toString)
+			// Take the results that were statically generated and update them now that we have the map that tells us
+			// what happened at runtime.
+			val statementResults = statementResultsWithPlaceHolders.map(_.transform {
+				// Extract values from the map and insert them in SimpleExpressionResults
+				case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) =>
+					values.get(id).map { value =>
+						simple.copy(final_ = value.transform(
+							value => Success(ObjectResult(value)),
+							exception => Success(ExceptionValue(exception))
+						).get)
+					}.getOrElse(simple) // If no value was found, just return the structure unchanged,
+										// it will probably get eliminated by the IfThenElse substitution
+				// We do not know in advance which branch will be executed, but now we know, so update the structure to reflect this
+				case result @IfThenElseResultPlaceholder(cond, then, else_, line) => {
+					val executed = if (result.isTrue) then else else_
+					IfThenElseResult(cond, executed, line)
+				}
+			})
+			StandardResult(statementResults, outputStream.toString)
+		} catch {
+			case ex: Throwable => ExceptionResult(ex, outputStream.toString)
+		}
 	} catch {
 		case ToolBoxError(msg, cause) => {
 			val userMessage = msg.dropWhile(_ != ':').drop(2).dropWhile(char => char == ' ' || char == '\n' || char == '\t')
-			val rest:Result = if (code.lines.isEmpty) Result(Nil, "") else computeResults(code.lines.drop(1).mkString)
-			Result(CompileErrorResult(userMessage, 0) :: rest.subResults, rest.output)
+			if (code.lines.isEmpty) StandardResult(Nil, "") else computeResults(code.lines.drop(1).mkString)
 		}
 	}
 
