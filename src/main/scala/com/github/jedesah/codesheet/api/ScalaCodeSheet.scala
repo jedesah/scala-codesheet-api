@@ -304,25 +304,24 @@ object ScalaCodeSheet {
 				case EmptyTree => (Nil, None)
 				case expr => {
 					val steps = Nil
-					val (trees, valueResult) =
-						if (expr.equalsStructure(notImplSymbol)) (List(expr), NotImplementedResult)
-						else {
-							// We create a temporary value to store the result of the expression
-							// We wrap the rhs in a Try monad to detect exceptions
-							val tempName = newTermName(nameOfTemp)
-							val tempVal = ValDef(Modifiers(), tempName, TypeTree(), wrapInTry(expr))
-							val indexLiteral = Literal(Constant(index))
-							val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLiteral, Ident(tempName)))
-							// We extract the actual value from the monad to preserve original program flow
-							val ref = Ident(tempName)
-							val extract = Select(ref, newTermName("get"))
-							val lastExpr = if (topLevel) ref else extract
-							val evalAndStore = Block(List(tempVal, storeInMap), lastExpr)
-							val result = PlaceHolder(index)
-							index = index + 1
-							(List(evalAndStore), result)
-						}
-					(trees, Some(SimpleExpressionResult(final_ = valueResult, steps = steps, line = AST.pos.line)))
+					// This is where most of the magic happens!
+					// We change the user's code to store evaluated expressions
+					// before moving on with the rest of the program
+
+					// We create a temporary value to store the result of the expression
+					// We wrap the rhs in a Try monad to detect exceptions
+					val tempName = newTermName(nameOfTemp)
+					val tempVal = ValDef(Modifiers(), tempName, TypeTree(), wrapInTry(expr))
+					val indexLiteral = Literal(Constant(index))
+					val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLiteral, Ident(tempName)))
+					// We extract the actual value from the monad to preserve original program flow
+					val ref = Ident(tempName)
+					val extract = Select(ref, newTermName("get"))
+					val lastExpr = if (topLevel) ref else extract
+					val evalAndStore = Block(List(tempVal, storeInMap), lastExpr)
+					val valueResult = PlaceHolder(index)
+					index = index + 1
+					(List(evalAndStore), Some(SimpleExpressionResult(final_ = valueResult, steps = steps, line = AST.pos.line)))
 				}
 			}
 		}
@@ -361,7 +360,10 @@ object ScalaCodeSheet {
 				values.get(id).map { value =>
 					simple.copy(final_ = value.transform(
 						value => Success(ObjectResult(value)),
-						exception => Success(ExceptionValue(exception))
+						exception => Success(exception match {
+							case ex: scala.NotImplementedError => NotImplementedResult
+							case ex => ExceptionValue(exception)
+						})
 					).get)
 				}.getOrElse(simple) // If no value was found, just return the structure unchanged,
 									// it will probably get eliminated by the IfThenElse substitution
