@@ -5,7 +5,7 @@ organization := "com.github.jedesah"
 
 name := "codesheet-api"
 
-versionWithGit
+version := "0.6.0-SNAPSHOT"
 
 scalaVersion := "2.10.3"
 
