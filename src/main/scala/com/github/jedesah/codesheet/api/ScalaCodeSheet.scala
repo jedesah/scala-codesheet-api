@@ -12,9 +12,10 @@ import com.github.jedesah.AugmentedCollections._
 
 object ScalaCodeSheet {
 
-	val nameOfMap = "youcannotnameyourvariablelikethisincodesheet_map"
-	val nameOfTemp = "youcannotnameyourvariablelikethisincodesheet_temp"
-	val nameOfClosuresMap = "youcannotnameyourvariablelikethisincodesheet_map_closure"
+	val reservedName = "youcannotnameyourvariablelikethisincodesheet"
+	val nameOfMap = reservedName + "_map"
+	val nameOfTemp = reservedName + "_temp"
+	val nameOfClosuresMap = reservedName + "_map_closure"
 
 	def childrenRepr(at: Int, elems: List[{ def line: Int; def userRepr: String}]): String =
 		elems.sortBy(_.line).foldLeft((at, "")) { case ((at, result), child) =>
@@ -42,6 +43,7 @@ object ScalaCodeSheet {
 		}
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]): StatementResult
 		def value: Option[Any]
+		def wasEvaluated: Boolean
 	}
 	abstract class ExpressionResult(override val line: Int) extends StatementResult(line)
 	case class BlockResult(children: List[StatementResult], override val line: Int) extends ExpressionResult(line) {
@@ -61,6 +63,7 @@ object ScalaCodeSheet {
 		}
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(children = children.map(_.transform(pf)))
 		def value = children.last.value
+		def wasEvaluated = children.exists(_.wasEvaluated) || children.isEmpty
 	}
 	case class ValDefResult(name: String, inferredType: Option[String], rhs: ExpressionResult, override val line: Int) extends StatementResult(line) {
 		def userRepr = {
@@ -69,6 +72,7 @@ object ScalaCodeSheet {
 		}
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(rhs = rhs.transform(pf).asInstanceOf[ExpressionResult])
 		def value = Some(())
+		def wasEvaluated = rhs.wasEvaluated
 	}
 	private case class IfThenElseResultPlaceholder(cond: ExpressionResult, then: ExpressionResult, else_ : ExpressionResult, override val line: Int) extends ExpressionResult(line) {
 		def value = if(isTrue) then.value else else_.value
@@ -79,6 +83,7 @@ object ScalaCodeSheet {
 			if (newCond.value.get.asInstanceOf[Boolean]) copy(cond = newCond, then = then.transform(pf).asInstanceOf[ExpressionResult])
 			else copy(cond = newCond, else_ = else_.transform(pf).asInstanceOf[ExpressionResult])
 		}
+		def wasEvaluated = cond.wasEvaluated
 	}
 	case class IfThenElseResult(cond: ExpressionResult, executed: ExpressionResult, override val line: Int) extends ExpressionResult(line) {
 		def value = executed.value
@@ -87,11 +92,15 @@ object ScalaCodeSheet {
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = {
 			copy(cond = cond.transform(pf).asInstanceOf[ExpressionResult], executed = executed.transform(pf).asInstanceOf[ExpressionResult])
 		}
+		// This structured is used to represent an if branching once we now which branch was executed at runtime
+		// so it was evaluated for sure unless we have a bug
+		def wasEvaluated = { assert(cond.wasEvaluated); true; }
 	}
 	case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], rhs: ExpressionResult, override val line: Int) extends StatementResult(line) {
 		def userRepr = name + asParamList(params) + inferredType.map(": " + _).getOrElse("") + " => " + rhs.userRepr
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(rhs = rhs.transform(pf).asInstanceOf[ExpressionResult])
 		def value = Some(())
+		def wasEvaluated = rhs.wasEvaluated
 	}
 	class ClassDefResult(val name: String, val params: List[AssignOrNamedArg], val body: BlockResult, override val line: Int) extends StatementResult(line) {
 		def bodyRepr = body.userRepr
@@ -101,6 +110,7 @@ object ScalaCodeSheet {
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(body = body.transform(pf).asInstanceOf[BlockResult])
 		def copy(name: String = name, params: List[AssignOrNamedArg] = params, body: BlockResult = body, line: Int = line) = ClassDefResult(name, params, body, line)
 		def value = Some(())
+		def wasEvaluated = body.wasEvaluated
 	}
 	object ClassDefResult {
 		def apply(name: String, params: List[AssignOrNamedArg], body: BlockResult, line: Int) = new ClassDefResult(name, params, body, line)
@@ -118,6 +128,7 @@ object ScalaCodeSheet {
 		}
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(body = body.transform(pf).asInstanceOf[BlockResult])
 		def value = Some(())
+		def wasEvaluated = body.wasEvaluated
 	}
 	trait NoChildren extends StatementResult {
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]): StatementResult = this
@@ -125,23 +136,21 @@ object ScalaCodeSheet {
 	case class SimpleExpressionResult(final_ : ValueResult, steps: List[Tree] = Nil, override val line: Int) extends ExpressionResult(line) with NoChildren {
 		def userRepr = (steps.map(_.prettyPrint) :+ final_.userRepr).mkString(" => ")
 		def value = final_.valueOption
+		def wasEvaluated = !final_.isInstanceOf[PlaceHolder]
 	}
 	case class CompileErrorResult(message: String, override val line: Int) extends StatementResult(line) with NoChildren {
 		def userRepr = message
 		def value = None
+		def wasEvaluated = false
 	}
 	trait ValueResult {
 		def userRepr: String
 		def valueOption: Option[Any]
 	}
-	case class ExceptionResult(ex: Throwable) extends ValueResult {
+	case class ExceptionValue(ex: Throwable) extends ValueResult {
 		def userRepr = "throws " + ex
 		def valueOption = Some(ex)
 	}
-	/**
-	 * Marker to indicate that the object within was thrown by the user code
-	 */
-	case class WasThrown(ex: Throwable)
 	case object NotImplementedResult extends ValueResult {
 		def userRepr = "???"
 		def valueOption = Some(new NotImplementedError())
@@ -166,33 +175,46 @@ object ScalaCodeSheet {
 		var index = 0
 		var indexClosures = 0
 
-		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef]): (Option[ValDef], ValDefResult) = {
-			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+		def wrapInTry(toWrap: Tree): Tree = Apply(Select(Select(Ident(newTermName("scala")), newTermName("util")), newTermName("Try")), List(toWrap))
+
+		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef], topLevel: Boolean): (List[Tree], ValDefResult) = {
+			val topLevelGoingForward = topLevel && !AST.isVar
+			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, topLevelGoingForward)
 			// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
 			// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
-			val valDef = rhsTrees.headOption.map { rhsTree =>
-				ValDef(AST.mods, AST.name, TypeTree(), rhsTree)
-			}
+			val trees = rhsTrees.headOption.map { rhsTree =>
+				if (topLevelGoingForward) {
+					val tempName = newTermName(reservedName + "_b_" + AST.name.toString)
+					val wrappedTemp = ValDef(Modifiers(), tempName, TypeTree(), rhsTree)
+					val asFunDef = DefDef(AST.mods, AST.name, List(), List(), AST.tpt, Select(Ident(tempName), newTermName("get")))
+					List(wrappedTemp, asFunDef)
+				}
+				else {
+					List(ValDef(AST.mods, AST.name, AST.tpt, rhsTree))
+				}
+			}.getOrElse(Nil)
 			val result = ValDefResult(AST.name.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
-			(valDef, result)
+			(trees, result)
 		}
 		def evaluateAssign(AST: Assign, classDefs: Traversable[ClassDef]): (Option[Assign], ValDefResult) = {
-			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false)
 			val assign = rhsTrees.headOption.map { rhsTree =>
 				Assign(AST.lhs, rhsTree)
 			}
 			val result = ValDefResult(AST.lhs.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
 			(assign, result)
 		}
-		def evaluateIf(AST: If, classDefs: Traversable[ClassDef]): (If, IfThenElseResultPlaceholder) = {
-			val (thenTree, thenResult) = evaluateImpl(AST.thenp, classDefs)
-			val (elseTree, elseResult) = evaluateImpl(AST.elsep, classDefs)
-			val (condTree, condResult) = evaluateImpl(AST.cond, classDefs)
+		def evaluateIf(AST: If, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, IfThenElseResultPlaceholder) = {
+			val (thenTree, thenResult) = evaluateImpl(AST.thenp, classDefs, false)
+			val (elseTree, elseResult) = evaluateImpl(AST.elsep, classDefs, false)
+			val (condTree, condResult) = evaluateImpl(AST.cond, classDefs, false)
 			val ifResult = IfThenElseResultPlaceholder(condResult.get.asInstanceOf[ExpressionResult], thenResult.get.asInstanceOf[ExpressionResult], elseResult.get.asInstanceOf[ExpressionResult], AST.pos.line)
-			(If(condTree.head, thenTree.head, elseTree.head), ifResult)
+			val ifTree = If(condTree.head, thenTree.head, elseTree.head)
+			val resultTree = if (topLevel) wrapInTry(ifTree) else ifTree
+			(resultTree, ifResult)
 		}
 		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): (List[Tree], DefDefResult) = {
-			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs)
+			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false)
 			// The Scala AST does not type it, but you can only have an expression as a rhs of a DefDef
 			// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
 			val trees = rhsTrees.headOption.map { rhsTree =>
@@ -210,13 +232,16 @@ object ScalaCodeSheet {
 			val defDefResult = DefDefResult(AST.name.toString, Nil, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
 			(trees, defDefResult)
 		}
-		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef]): (Block, BlockResult) = {
-			val (trees, results) = evaluateList(AST.children, classDefs)
-			(Block(trees.init, trees.last), BlockResult(results, AST.pos.line))
+		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, BlockResult) = {
+			val additionnalClassDefs = AST.children.collect { case child: ClassDef => child }
+			val (trees, results) = evaluateList(AST.children, classDefs, false)
+			val newBlock = Block(trees.init, trees.last)
+			val transformedTree = if (topLevel) wrapInTry(newBlock) else newBlock
+			(transformedTree, BlockResult(results, AST.pos.line))
 		}
-		def evaluateList(list: List[Tree], classDefs: Traversable[ClassDef]) : (List[Tree], List[StatementResult]) = {
+		def evaluateList(list: List[Tree], classDefs: Traversable[ClassDef], topLevel: Boolean) : (List[Tree], List[StatementResult]) = {
 			val additionnalClassDefs = list.collect { case child: ClassDef => child }
-			val (childTrees, childResults) = list.map(evaluateImpl(_, classDefs ++ additionnalClassDefs)).unzip
+			val (childTrees, childResults) = list.map(evaluateImpl(_, classDefs ++ additionnalClassDefs, topLevel)).unzip
 			(childTrees.flatten, childResults.flatten)
 		}
 		def evaluateClassDef(AST: ClassDef, classDefs: Traversable[ClassDef]): Option[(Option[Block], ClassDefResult)] = {
@@ -238,7 +263,7 @@ object ScalaCodeSheet {
 							case other => other != constructor
 						}
 						val sampleValues = sampleParams ++ implementedMembers
-						val (trees, results) = evaluateList(noAbstract, classDefs)
+						val (trees, results) = evaluateList(noAbstract, classDefs, false)
 						val classDefResult = ClassDefResult(AST.name.toString, paramList(sampleParams), BlockResult(results, line = AST.pos.line), line = AST.pos.line)
 						val blockOption = if (trees.isEmpty) None else Some(Block(sampleValues ++ trees, Literal(Constant(()))))
 						Some(blockOption, classDefResult)
@@ -248,21 +273,21 @@ object ScalaCodeSheet {
 		}
 		def evaluateModuleDef(AST: ModuleDef, classDefs: Traversable[ClassDef]): (Block, ModuleDefResult) = {
 			val body = AST.impl.body.filter(!isConstructor(_))
-			val (trees, results) = evaluateList(body, classDefs)
+			val (trees, results) = evaluateList(body, classDefs, false)
 			(Block(trees, Literal(Constant(()))), ModuleDefResult(AST.name.toString, BlockResult(results, line = AST.pos.line), line = AST.pos.line))
 		}
-		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef]): (List[Tree], Option[StatementResult]) = {
+		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef], topLevel: Boolean): (List[Tree], Option[StatementResult]) = {
 			AST match {
 				case assign: Assign => {
 					val (newAssignOption, valDefResult) = evaluateAssign(assign, classDefs)
 					(newAssignOption.toList, Some(valDefResult))
 				}
 				case ifTree: If => {
-					val (newIf, ifResult) = evaluateIf(ifTree, classDefs)
+					val (newIf, ifResult) = evaluateIf(ifTree, classDefs, topLevel)
 					(List(newIf), Some(ifResult))
 				}
 				case valDef: ValDef => {
-					val (newValDefOption, valDefResult) = evaluateValDef(valDef, classDefs)
+					val (newValDefOption, valDefResult) = evaluateValDef(valDef, classDefs, topLevel)
 					(newValDefOption.toList	, Some(valDefResult))
 				}
 				case funDef: DefDef => {
@@ -270,7 +295,7 @@ object ScalaCodeSheet {
 					(trees, Some(defDefResult))
 				}
 				case block: Block => {
-					val (newblock, blockResult) = evaluateBlock(block, classDefs)
+					val (newblock, blockResult) = evaluateBlock(block, classDefs, topLevel)
 					(List(newblock), Some(blockResult))
 				}
 				case classDef: ClassDef => {
@@ -286,22 +311,25 @@ object ScalaCodeSheet {
 				case EmptyTree => (Nil, None)
 				case expr => {
 					val steps = Nil
-					val (trees, valueResult) =
-						if (expr.equalsStructure(notImplSymbol)) (List(expr), NotImplementedResult)
-						else {
-							val tempVal = ValDef(Modifiers(), newTermName(nameOfTemp), TypeTree(), expr)
-							val indexLit = Literal(Constant(index))
-							val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Ident(newTermName(nameOfTemp))))
-							val refA = Ident(newTermName(nameOfTemp))
-							val evalAndStore:Block = Block(List(tempVal, storeInMap), refA)
-							//val refWasThrown = reify { WasThrown }.tree
-							val refWasThrown = Select(Select(Select(Select(Select(Select(Ident(newTermName("com")), newTermName("github")), newTermName("jedesah")), newTermName("codesheet")), newTermName("api")), newTermName("ScalaCodeSheet")), newTermName("WasThrown"))
-							val tree = Try(evalAndStore, List(CaseDef(Bind(newTermName("ex"), Typed(Ident(nme.WILDCARD), Ident(newTypeName("Throwable")))), EmptyTree, Block(List(Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLit, Apply(refWasThrown, List(Ident(newTermName("ex"))))))), Throw(Ident(newTermName("ex")))))), EmptyTree)
-							val result = PlaceHolder(index)
-							index = index + 1
-							(List(tree), result)
-						}
-					(trees, Some(SimpleExpressionResult(final_ = valueResult, steps = steps, line = AST.pos.line)))
+
+					// This is where most of the magic happens!
+					// We change the user's code to store evaluated expressions
+					// before moving on with the rest of the program
+
+					// We create a temporary value to store the result of the expression
+					// We wrap the rhs in a Try monad to detect exceptions
+					val tempName = newTermName(nameOfTemp)
+					val tempVal = ValDef(Modifiers(), tempName, TypeTree(), wrapInTry(expr))
+					val indexLiteral = Literal(Constant(index))
+					val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLiteral, Ident(tempName)))
+					// We extract the actual value from the monad to preserve original program flow
+					val ref = Ident(tempName)
+					val extract = Select(ref, newTermName("get"))
+					val lastExpr = if (topLevel) ref else extract
+					val evalAndStore = Block(List(tempVal, storeInMap), lastExpr)
+					val valueResult = PlaceHolder(index)
+					index = index + 1
+					(List(evalAndStore), Some(SimpleExpressionResult(final_ = valueResult, steps = steps, line = AST.pos.line)))
 				}
 			}
 		}
@@ -313,14 +341,17 @@ object ScalaCodeSheet {
 		val retrieveMaps = Apply(Select(Ident("scala"), newTermName("Tuple2")), List(retrieveMapValues, retrieveMapClosures))
 
 		val (trees, results) = AST match {
-			case block: Block if block.pos == NoPosition => evaluateList(block.children, Nil)
+			case block: Block if block.pos == NoPosition => evaluateList(block.children, Nil, topLevel = true)
 			case _ => {
-				val (trees, resultOption) = evaluateImpl(AST, Nil)
+				val (trees, resultOption) = evaluateImpl(AST, Nil, topLevel = true)
 				(trees, resultOption.toList)
 			}
 		}
 
-		(Block(beginMapValues :: beginMapClosures :: trees, retrieveMaps), results)
+		val transformedUserAST = wrapInTry(Block(trees, reify{ () }.tree))
+		val transformedAST = Block(List(beginMapValues, beginMapClosures, transformedUserAST), retrieveMaps)
+
+		(transformedAST, results)
 	}
 
 	def computeResults(code: String, enableSteps: Boolean = true): Result = try {
@@ -328,10 +359,13 @@ object ScalaCodeSheet {
 		val AST = toolBox.parse(code)
 		val (instrumented, statementResultsWithPlaceHolders) = analyseAndTransform(AST, enableSteps = enableSteps)
 		val outputStream = new java.io.ByteArrayOutputStream()
-		val (placeholderValues, closures) = Console.withOut(outputStream) {
+
+		import scala.util.{Try, Success}
+		val (values, closures) = Console.withOut(outputStream) {
 			import scala.collection.mutable.Map
-			toolBox.eval(instrumented).asInstanceOf[(Map[Int, Any], Map[Int, AnyRef])]
+			toolBox.eval(instrumented).asInstanceOf[(Map[Int, Try[Any]], Map[Int, AnyRef])]
 		}
+
 		// This is a huge hack but it demontrates that the closures can be called and they work
 		// TODO: Change this to use reflection to call these functions
 		closures.values.foreach { closure =>
@@ -342,29 +376,34 @@ object ScalaCodeSheet {
 				case _: Throwable =>
 			}
 		}
+
 		// Take the results that were statically generated and update them now that we have the map that tells us
 		// what happened at runtime.
 		val statementResults = statementResultsWithPlaceHolders.map(_.transform {
-			// Extract values from the map and insert them in SimpleExpressionResult
-			case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) => placeholderValues.get(id).map {
-				// An exception was thrown while executing the code, reflect that in the new structure
-				case WasThrown(throwable) => simple.copy(final_ = ExceptionResult(throwable))
-				// The most common case
-				case value => simple.copy(final_ = value)
-			// If no value was found, just return the structure unchanged, it will probably get eliminated by the IfThenElse substitution
-			}.getOrElse(simple)
+			// Extract values from the map and insert them in SimpleExpressionResults
+			case simple @ SimpleExpressionResult(PlaceHolder(id), _, _) =>
+				values.get(id).map { value =>
+					simple.copy(final_ = value.transform(
+						value => Success(ObjectResult(value)),
+						exception => Success(exception match {
+							case ex: scala.NotImplementedError => NotImplementedResult
+							case ex => ExceptionValue(exception)
+						})
+					).get)
+				}.getOrElse(simple) // If no value was found, just return the structure unchanged,
+									// it will probably get eliminated by the IfThenElse substitution
 			// We do not know in advance which branch will be executed, but now we know, so update the structure to reflect this
 			case result @IfThenElseResultPlaceholder(cond, then, else_, line) => {
 				val executed = if (result.isTrue) then else else_
 				IfThenElseResult(cond, executed, line)
 			}
+			case block @BlockResult(children, _) => block.copy(children = children.filter(_.wasEvaluated))
 		})
-		Result(statementResults, outputStream.toString)
+		Result(statementResults.filter(_.wasEvaluated), outputStream.toString)
 	} catch {
 		case ToolBoxError(msg, cause) => {
 			val userMessage = msg.dropWhile(_ != ':').drop(2).dropWhile(char => char == ' ' || char == '\n' || char == '\t')
-			val rest:Result = if (code.lines.isEmpty) Result(Nil, "") else computeResults(code.lines.drop(1).mkString)
-			Result(CompileErrorResult(userMessage, 0) :: rest.subResults, rest.output)
+			if (code.lines.isEmpty) Result(Nil, "") else computeResults(code.lines.drop(1).mkString)
 		}
 	}
 

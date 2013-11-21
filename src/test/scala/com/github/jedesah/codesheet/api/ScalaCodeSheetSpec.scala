@@ -16,7 +16,8 @@ class ScalaCodeSheetSpec extends Specification {
 		else first === second
 
 	val tb = cm.mkToolBox()
-	// args.select(ex = "7")
+	//args.select(ex = "simple definition")
+	//args.execute(sequential = true)
 
 	"ScalaCodeSheet" should {
 		"expressions" in {
@@ -757,7 +758,7 @@ class ScalaCodeSheetSpec extends Specification {
 								)
 							}
 						}
-					}.pendingUntilFixed
+					}.pendingUntilFixed("Pretty sure this problem is due to the lack of the synthetic flag in reflection in the current compiler version")
 				}
 			}
 		}
@@ -1323,14 +1324,14 @@ class ScalaCodeSheetSpec extends Specification {
 					computeResults(code, false) must beLike { case Result(List(ValDefResult("a", None, rhs, 1)), "") =>
 						rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 					}
-				}.pendingUntilFixed("Gotta look into what's the best way of doing all of this")
+				}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
 				"function definition" in {
 					"no params" in {
 						val code = "def gog = ???"
 						computeResults(code, false) must beLike { case Result(List(DefDefResult("gog", Nil, None, rhs, 1)), "") =>
 							rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 						}
-					}
+					}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
 					"with params" in {
 						val code = "def gogg(a: Int) = ???"
 						computeResults(code, false) must beLike { case Result(List(DefDefResult("gogg", params, None, rhs, 1)), "") =>
@@ -1339,7 +1340,7 @@ class ScalaCodeSheetSpec extends Specification {
 							}
 							rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 						}
-					}
+					}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
 				}
 			}
 			"complex scenarios" in {
@@ -1351,7 +1352,7 @@ class ScalaCodeSheetSpec extends Specification {
 							a ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 							b ==== SimpleExpressionResult(NotImplementedResult, Nil, 2)
 						}
-					}.pendingUntilFixed("Not sure this should actually be supported")
+					}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
 					"2" in {
 						val code = """val a: Int = ???
 									 |val b = a * 2""".stripMargin
@@ -1359,7 +1360,7 @@ class ScalaCodeSheetSpec extends Specification {
 							a ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 							b ==== SimpleExpressionResult(NotImplementedResult, Nil, 2)
 						}
-					}.pendingUntilFixed("Not sure this should actually be supported")
+					}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
 				}
 				"unimplemented function definition with later use" in {
 					val code = """def a: Int = ???
@@ -1368,22 +1369,98 @@ class ScalaCodeSheetSpec extends Specification {
 						a ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 						b ==== SimpleExpressionResult(NotImplementedResult, Nil, 2)
 					}
-				}.pendingUntilFixed
+				}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
 			}
 		}
 		"throws an exception" in {
+			def verifyException(ex: Throwable) = ex must beLike { case ex: java.lang.ArithmeticException => ex.getMessage ==== "/ by zero" }
 			"value definition" in {
 				val code = "val a = 10 / 0"
 				computeResults(code, false) must beLike { case Result(List(a), "") =>
-					a ==== SimpleExpressionResult(ExceptionResult(new java.lang.ArithmeticException("/ by zero")), Nil, 1)
+					a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
+						verifyException(ex)
+					}
 				}
-			}.pendingUntilFixed("Not sure this should actually be supported")
+			}
 			"function definition" in {
 				val code = "def a = 10 / 0"
 				computeResults(code, false) must beLike { case Result(List(a), "") =>
-					a must beLike { case DefDefResult("a", Nil, None, SimpleExpressionResult(ExceptionResult(ex), Nil, 1), 1) =>
-						ex must beLike { case ex: java.lang.ArithmeticException => ex.getMessage ==== "/ by zero" }
+					a must beLike { case DefDefResult("a", Nil, None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
+						verifyException(ex)
 					}
+				}
+			}
+			"value definition followed by" in {
+				"an unrelated expression" in {
+					val code = """val a = 10 / 0
+								 |7 * 7""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(a, expr), "") =>
+						a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
+							verifyException(ex)
+						}
+						expr ==== SimpleExpressionResult(49, Nil, 2)
+					}
+				}
+				"a related expression" in {
+					val code = """val a = 10 / 0
+								 |a * 2""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(a, expr), "") =>
+						a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
+							verifyException(ex)
+						}
+						expr must beLike { case SimpleExpressionResult(ExceptionValue(ex), Nil, 2) =>
+							verifyException(ex)
+						}
+					}
+				}
+			}
+			"top level" in {
+				"no output" in {
+					"throws an exception" in {
+						val code = "var a = 10 / 0"
+						computeResults(code, false) must beLike { case Result(List(a), "") =>
+							a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
+								verifyException(ex)
+							}
+						}
+					}
+				}
+				"output" in {
+					val message = "JeanRemi works too hard"
+					val code = s"""print("$message")
+								 |var a = 10 / 0""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(print, a), actualMessage) =>
+						print ==== SimpleExpressionResult((), Nil, 1)
+						a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 2), 2) =>
+							verifyException(ex)
+						}
+						actualMessage ==== message
+					}
+				}
+				"followed by a related expression" in {
+					val code = """var a = 10 / 0
+								 |a * 10""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(a), "") =>
+						a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
+							verifyException(ex)
+						}
+					}
+				}
+			}
+			"inside block" in {
+				val code = """{
+							 |	val a = 3 / 0
+							 |	val b = a * 2
+							 |	val c = b / 3
+							 |}
+							 |4 * 4""".stripMargin
+				computeResults(code, false) must beLike { case Result(List(block, last), "") =>
+					block must beLike { case BlockResult(List(a), 1) =>
+						a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 2), 2) =>
+							verifyException(ex)
+						}
+					}
+					last ==== SimpleExpressionResult(16, Nil, 6)
 				}
 			}
 		}
