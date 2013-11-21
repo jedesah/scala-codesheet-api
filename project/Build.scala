@@ -17,6 +17,7 @@ object ApplicationBuild extends Build {
 			name := "scala-insight",
 			scalaVersion := "2.10.3",
 			licenses += ("LGPL-3.0", url("http://www.gnu.org/copyleft/lgpl.html")),
+			bintray.Keys.bintrayOrganization in bintray.Keys.bintray := Some("codebrew-io"),
 			libraryDependencies ++= Seq(
 				"org.scala-lang" % "scala-compiler" % scalaVersion.value,
 				"com.github.nscala-time" %% "nscala-time" % "0.6.0",
