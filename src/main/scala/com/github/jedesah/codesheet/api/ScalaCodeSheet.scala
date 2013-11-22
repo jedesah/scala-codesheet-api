@@ -79,9 +79,8 @@ object ScalaCodeSheet {
 		def isTrue = cond.value.get.asInstanceOf[Boolean]
 		def userRepr = if (isTrue) "then => " + then.userRepr else "else => " + else_.userRepr
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = {
-			val newCond = cond.transform(pf).asInstanceOf[ExpressionResult]
-			if (newCond.value.get.asInstanceOf[Boolean]) copy(cond = newCond, then = then.transform(pf).asInstanceOf[ExpressionResult])
-			else copy(cond = newCond, else_ = else_.transform(pf).asInstanceOf[ExpressionResult])
+			val elems = this.productIterator.map(_.asInstanceOf[ExpressionResult].transform(pf).asInstanceOf[ExpressionResult])
+			copy(elems.next, elems.next, elems.next)
 		}
 		def wasEvaluated = cond.wasEvaluated
 	}
@@ -389,8 +388,13 @@ object ScalaCodeSheet {
 									// it will probably get eliminated by the IfThenElse substitution
 			// We do not know in advance which branch will be executed, but now we know, so update the structure to reflect this
 			case result @IfThenElseResultPlaceholder(cond, then, else_, line) => {
-				val executed = if (result.isTrue) then else else_
-				IfThenElseResult(cond, executed, line)
+				if (result.wasEvaluated) {
+					val executed = if (result.isTrue) then else else_
+					IfThenElseResult(cond, executed, line)
+				}
+				// If it was not evaluated at all, just leave it,
+				// it will be eliminated by the logic that removes non evaluated results
+				else result
 			}
 			case block @BlockResult(children, _) => block.copy(children = children.filter(_.wasEvaluated))
 		})
