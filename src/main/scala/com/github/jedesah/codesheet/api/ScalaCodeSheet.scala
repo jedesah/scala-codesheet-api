@@ -369,12 +369,7 @@ object ScalaCodeSheet {
 		// This is a huge hack but it demontrates that the closures can be called and they work
 		// TODO: Change this to use reflection to call these functions
 		closures.values.foreach { closure =>
-			try {
-				closure.asInstanceOf[Function0[_]]()
-			}
-			catch {
-				case _: Throwable =>
-			}
+			Try(closure.asInstanceOf[Function0[_]]())
 		}
 
 		// Take the results that were statically generated and update them now that we have the map that tells us
