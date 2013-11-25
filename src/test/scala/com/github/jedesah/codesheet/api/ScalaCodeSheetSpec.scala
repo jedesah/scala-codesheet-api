@@ -803,6 +803,22 @@ class ScalaCodeSheetSpec extends Specification {
 					second ==== ValDefResult("b", None, rhs = SimpleExpressionResult(45, line = 2), line = 2)
 				}
 			}
+			"pattern matching" in {
+				"simple" in {
+					val code = "val (a, b) = (4,5)"
+					computeResults(code) must beLike { case Result(List(a, b), "") =>
+						a ==== ValDefResult("a", None, rhs = SimpleExpressionResult(4, line = 1), line = 1)
+						b ==== ValDefResult("b", None, rhs = SimpleExpressionResult(5, line = 1), line = 1)
+					}
+				}
+				"more complex" in {
+					val code = "val (a :: b, _, _) = (List(4,5,6), 6.0, true)"
+					computeResults(code) must beLike { case Result(List(a, b), "") =>
+						a ==== ValDefResult("a", None, rhs = SimpleExpressionResult(4, line = 1), line = 1)
+						b ==== ValDefResult("b", None, rhs = SimpleExpressionResult(List(5,6), line = 1), line = 1)
+					}
+				}
+			}
 		}
 		"variable definition" in {
 			"simple" in {

@@ -175,24 +175,27 @@ object ScalaCodeSheet {
 
 		def wrapInTry(toWrap: Tree): Tree = Apply(Select(Select(Ident(newTermName("scala")), newTermName("util")), newTermName("Try")), List(toWrap))
 
-		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef], topLevel: Boolean): (List[Tree], ValDefResult) = {
-			val topLevelGoingForward = topLevel && !AST.isVar
-			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, topLevelGoingForward)
-			// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
-			// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
-			val trees = rhsTrees.headOption.map { rhsTree =>
-				if (topLevelGoingForward) {
-					val tempName = newTermName(reservedName + "_b_" + AST.name.toString)
-					val wrappedTemp = ValDef(Modifiers(), tempName, TypeTree(), rhsTree)
-					val asFunDef = DefDef(AST.mods, AST.name, List(), List(), AST.tpt, Select(Ident(tempName), newTermName("get")))
-					List(wrappedTemp, asFunDef)
-				}
-				else {
-					List(ValDef(AST.mods, AST.name, AST.tpt, rhsTree))
-				}
-			}.getOrElse(Nil)
-			val result = ValDefResult(AST.name.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
-			(trees, result)
+		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef], topLevel: Boolean): (List[Tree], Option[ValDefResult]) = {
+			if (AST.isSynthetic) (List(AST), None)
+			else {
+				val topLevelGoingForward = topLevel && !AST.isVar
+				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, topLevelGoingForward)
+				// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
+				// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
+				val trees = rhsTrees.headOption.map { rhsTree =>
+					if (topLevelGoingForward) {
+						val tempName = newTermName(reservedName + "_b_" + AST.name.toString)
+						val wrappedTemp = ValDef(Modifiers(), tempName, TypeTree(), rhsTree)
+						val asFunDef = DefDef(AST.mods, AST.name, List(), List(), AST.tpt, Select(Ident(tempName), newTermName("get")))
+						List(wrappedTemp, asFunDef)
+					}
+					else {
+						List(ValDef(AST.mods, AST.name, AST.tpt, rhsTree))
+					}
+				}.getOrElse(Nil)
+				val result = ValDefResult(AST.name.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
+				(trees, Some(result))
+			}
 		}
 		def evaluateAssign(AST: Assign, classDefs: Traversable[ClassDef]): (Option[Assign], ValDefResult) = {
 			val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false)
@@ -292,7 +295,7 @@ object ScalaCodeSheet {
 				}
 				case valDef: ValDef => {
 					val (newValDefOption, valDefResult) = evaluateValDef(valDef, classDefs, topLevel)
-					(newValDefOption.toList	, Some(valDefResult))
+					(newValDefOption.toList, valDefResult)
 				}
 				case funDef: DefDef => {
 					evaluateDefDef(funDef, classDefs).map { case (blockOption, defDefResult) =>
