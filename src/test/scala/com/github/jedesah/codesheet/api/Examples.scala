@@ -48,7 +48,7 @@ class Examples extends Specification {
 							 |}""".stripMargin
 				computeResults(code).userRepr must not be empty;
 			}
-			/*"2" in {
+			"2" in {
 				val code = """def quickSort(list: List[Int]): List[Int] = {
 							 |	if (list.isEmpty) Nil
 	    					 |	else {
@@ -59,10 +59,17 @@ class Examples extends Specification {
 				computeResults(code) must beLike { case Result(List(defDef), "") =>
 					defDef must beLike { case DefDefResult("quickSort", List(param), None, body, 1) =>
 						structureEquals(param, AssignOrNamedArg(Ident(newTermName("list")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
-						body ==== SimpleExpressionResult(List(3,5,7), Nil, line = 2)
+						body must beLike { case IfThenElseResult(cond, executed, 2) =>
+							cond ==== SimpleExpressionResult(false, Nil, line = 2)
+							executed must beLike { case BlockResult(List(smaller, larger, expr), 3) =>
+								smaller ==== ValDefResult("smaller", None, SimpleExpressionResult(Nil, Nil, line = 4), line = 4)
+								larger ==== ValDefResult("larger", None, SimpleExpressionResult(List(5,7), Nil, line = 4), line = 4)
+								expr ==== SimpleExpressionResult(List(3,5,7), Nil, line = 5)
+							}
+						}
 					}
 				}
-			}*/
+			}
 		}
 	}
 }

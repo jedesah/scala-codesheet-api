@@ -231,7 +231,7 @@ object ScalaCodeSheet {
 			import shapeless.syntax.typeable._
 			// This block was added by the Scala compiler while desaguring a Scala feature
 			// For instance, when using an operator ending with a colon
-			if (AST.children(0).cast[ValDef].map(_.isSynthetic).getOrElse(false)) {
+			if (AST.children(0).cast[ValDef].map(_.isSynthetic).getOrElse(false) && AST.children.length == 2) {
 				val (trees, resultOption) = evaluateImpl(AST.children(1), classDefs, false)
 				// We return the same compiler generated block exept we instrumented
 				// the expression the user is interested in
