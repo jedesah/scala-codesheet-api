@@ -308,21 +308,39 @@ class ScalaCodeSheetSpec extends Specification {
 							}
 						}
 					}
-					"wildCardGeneric" in {
-						val code = "def foo(a: List[_], b: List[_], c: List[_]) = if (c.nonEmpty) a else b"
-						computeResults(code, enableSteps = false) must beLike { case Result(List(first), "") =>
-							first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
-								rhs must beLike{ case SimpleExpressionResult(ObjectResult(List(3, 5, 7)), List(step), 1) =>
-									structureEquals(step, tb.parse("if (List(true).nonEmpty) List(3, 5, 7) else List()"))
-								}
-								params must beLike { case List(a,b,c) =>
-									structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
-									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))))
-									structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(true))))))
+					"generic" in {
+						"wildcard" in {
+							val code = "def foo(a: List[_], b: List[_], c: List[_]) = if (c.nonEmpty) a else b"
+							computeResults(code, enableSteps = false) must beLike { case Result(List(first), "") =>
+								first must beLike { case DefDefResult("foo", params, None, rhs, 1) =>
+									rhs must beLike { case SimpleExpressionResult(ObjectResult(List(3, 5, 7)), List(step), 1) =>
+										structureEquals(step, tb.parse("if (List(true).nonEmpty) List(3, 5, 7) else List()"))
+									}
+									params must beLike { case List(a,b,c) =>
+										structureEquals(a, AssignOrNamedArg(Ident(newTermName("a")), Apply(Ident(newTermName("List")), List(Literal(Constant(3)), Literal(Constant(5)), Literal(Constant(7))))))
+										structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Ident(newTermName("Nil"))))
+										structureEquals(c, AssignOrNamedArg(Ident(newTermName("c")), Apply(Ident(newTermName("List")), List(Literal(Constant(true))))))
+									}
 								}
 							}
-						}
-					}.pendingUntilFixed
+						}.pendingUntilFixed
+						"type parameter" in {
+							val code = """def interleave[T](first: List[T], second: List[T]): List[T] =
+										 |	if (first == Nil) second
+										 |	else if (second == Nil) first
+										 |	else first.head :: second.head :: interleave(first.tail, second.tail)
+										 |}""".stripMargin
+							computeResults(code, false) must beLike { case Result(List(ifThenElse), "") =>
+								ifThenElse must beLike { case IfThenElseResult(cond, executed, 2) =>
+									cond ==== SimpleExpressionResult(false, Nil, 2)
+									executed must beLike { case IfThenElseResult(cond, executed, 3) =>
+										cond ==== SimpleExpressionResult(true, Nil, 3)
+										executed ==== SimpleExpressionResult(List(3,5,7), Nil, 3)
+									}
+								}
+							}
+						}.pendingUntilFixed
+					}
 				}
 				"custom class" in {
 					"case" in {
