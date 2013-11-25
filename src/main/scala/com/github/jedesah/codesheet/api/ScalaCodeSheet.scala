@@ -224,12 +224,24 @@ object ScalaCodeSheet {
 				(try_, defDefResult)
 			}
 		}
-		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, BlockResult) = {
-			val additionnalClassDefs = AST.children.collect { case child: ClassDef => child }
-			val (trees, results) = evaluateList(AST.children, classDefs, false)
-			val newBlock = Block(trees.init, trees.last)
-			val transformedTree = if (topLevel) wrapInTry(newBlock) else newBlock
-			(transformedTree, BlockResult(results, AST.pos.line))
+		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, StatementResult) = {
+			import shapeless.syntax.typeable._
+			// This block was added by the Scala compiler while desaguring a Scala feature
+			// For instance, when using an operator ending with a colon
+			if (AST.children(0).cast[ValDef].map(_.isSynthetic).getOrElse(false)) {
+				val (trees, resultOption) = evaluateImpl(AST.children(1), classDefs, false)
+				// We return the same compiler generated block exept we instrumented
+				// the expression the user is interested in
+				// i.e we did not instrument the compiler generated code that would surprise the user
+				(Block(List(AST.children(0)), trees.head), resultOption.get)
+			}
+			else {
+				val additionnalClassDefs = AST.children.collect { case child: ClassDef => child }
+				val (trees, results) = evaluateList(AST.children, classDefs, false)
+				val newBlock = Block(trees.init, trees.last)
+				val transformedTree = if (topLevel) wrapInTry(newBlock) else newBlock
+				(transformedTree, BlockResult(results, AST.pos.line))
+			}
 		}
 		def evaluateList(list: List[Tree], classDefs: Traversable[ClassDef], topLevel: Boolean) : (List[Tree], List[StatementResult]) = {
 			val additionnalClassDefs = list.collect { case child: ClassDef => child }

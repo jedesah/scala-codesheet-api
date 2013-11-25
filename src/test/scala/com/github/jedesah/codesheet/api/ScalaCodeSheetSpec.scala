@@ -758,7 +758,7 @@ class ScalaCodeSheetSpec extends Specification {
 								)
 							}
 						}
-					}.pendingUntilFixed("Pretty sure this problem is due to the lack of the synthetic flag in reflection in the current compiler version")
+					}
 				}
 			}
 		}
@@ -1324,14 +1324,14 @@ class ScalaCodeSheetSpec extends Specification {
 					computeResults(code, false) must beLike { case Result(List(ValDefResult("a", None, rhs, 1)), "") =>
 						rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 					}
-				}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
+				}
 				"function definition" in {
 					"no params" in {
 						val code = "def gog = ???"
 						computeResults(code, false) must beLike { case Result(List(DefDefResult("gog", Nil, None, rhs, 1)), "") =>
 							rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 						}
-					}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
+					}
 					"with params" in {
 						val code = "def gogg(a: Int) = ???"
 						computeResults(code, false) must beLike { case Result(List(DefDefResult("gogg", params, None, rhs, 1)), "") =>
@@ -1340,7 +1340,7 @@ class ScalaCodeSheetSpec extends Specification {
 							}
 							rhs ==== SimpleExpressionResult(NotImplementedResult, Nil, 1)
 						}
-					}.pendingUntilFixed("Need to wait for change to what a Non-Fatal error is in Scala 2.11")
+					}
 				}
 			}
 			"complex scenarios" in {

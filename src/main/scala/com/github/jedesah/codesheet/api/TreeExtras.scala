@@ -49,6 +49,7 @@ package object api {
 
 	implicit class AugmentedValDef(valDef: ValDef) {
 		val isVar = valDef.mods.hasFlag(MUTABLE)
+		val isSynthetic = valDef.mods.hasFlag(SYNTHETIC)
 	}
 
 	def anonClass(name: String, impl: List[ValOrDefDef] = Nil) = Block(List(ClassDef(Modifiers(FINAL), newTypeName("$anon"), List(), Template(List(Ident(newTypeName(name))), emptyValDef, List(DefDef(Modifiers(), nme.CONSTRUCTOR, List(), List(List()), TypeTree(), Block(List(Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List())), Literal(Constant(()))))) ::: impl))), Apply(Select(New(Ident(newTypeName("$anon"))), nme.CONSTRUCTOR), Nil))
