@@ -869,8 +869,8 @@ class ScalaCodeSheetSpec extends Specification {
 						 |	case a :: b :: c :: Nil => true
 						 |}""".stripMargin
 			computeResults(code) must beLike { case Result(List(patternMatch), "") =>
-				patternMatch mustbeLike { case MatchResult(expr, matchedCase) =>
-					expr ==== SimpleExpressionResult(List(1,2,3), Nil, 1)
+				patternMatch must beLike { case MatchResult(selector, matchedCase, 1) =>
+					selector ==== SimpleExpressionResult(List(1,2,3), Nil, 1)
 					matchedCase ==== SimpleExpressionResult(true, Nil, 3)
 				}
 			}

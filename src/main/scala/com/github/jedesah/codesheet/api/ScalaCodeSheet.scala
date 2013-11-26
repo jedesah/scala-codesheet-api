@@ -43,6 +43,10 @@ object ScalaCodeSheet {
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]): StatementResult
 		def value: Option[Any]
 		def wasEvaluated: Boolean
+		def printAfterLineDiff(toPrint: ExpressionResult, customPrint: ExpressionResult => String = expr => expr.userRepr ) = {
+			val lineDiff = toPrint.line - line
+			"\n" * lineDiff + (if(lineDiff > 0) "\t" else " ") + customPrint(toPrint)
+		}
 	}
 	abstract class ExpressionResult(override val line: Int) extends StatementResult(line)
 	case class BlockResult(children: List[StatementResult], override val line: Int) extends ExpressionResult(line) {
@@ -65,10 +69,7 @@ object ScalaCodeSheet {
 		def wasEvaluated = children.exists(_.wasEvaluated) || children.isEmpty
 	}
 	case class ValDefResult(name: String, inferredType: Option[String], rhs: ExpressionResult, override val line: Int) extends StatementResult(line) {
-		def userRepr = {
-			val lineDiff = rhs.line - line
-			name + inferredType.map(": " + _).getOrElse("") + " =" + "\n" * lineDiff + (if(lineDiff > 0) "\t" else " ") + rhs.userRepr
-		}
+		def userRepr = name + inferredType.map(": " + _).getOrElse("") + " =" + printAfterLineDiff(rhs)
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(rhs = rhs.transform(pf).asInstanceOf[ExpressionResult])
 		def value = Some(())
 		def wasEvaluated = rhs.wasEvaluated
@@ -76,7 +77,7 @@ object ScalaCodeSheet {
 	private case class IfThenElseResultPlaceholder(cond: ExpressionResult, then: ExpressionResult, else_ : ExpressionResult, override val line: Int) extends ExpressionResult(line) {
 		def value = if(isTrue) then.value else else_.value
 		def isTrue = cond.value.get.asInstanceOf[Boolean]
-		def userRepr = if (isTrue) "then => " + then.userRepr else "else => " + else_.userRepr
+		def userRepr = error("This should never be called")
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = {
 			val newCond = cond.transform(pf).asInstanceOf[ExpressionResult]
 			if (newCond.value.get.asInstanceOf[Boolean]) copy(cond = newCond, then = then.transform(pf).asInstanceOf[ExpressionResult])
@@ -87,7 +88,7 @@ object ScalaCodeSheet {
 	case class IfThenElseResult(cond: ExpressionResult, executed: ExpressionResult, override val line: Int) extends ExpressionResult(line) {
 		def value = executed.value
 		def isTrue = cond.value.get.asInstanceOf[Boolean]
-		def userRepr = (if (isTrue) "then => " else "else => ") + executed.userRepr
+		def userRepr = printAfterLineDiff(executed, (expr) => (if (isTrue) "then => " else "else => ") + expr.userRepr)
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = {
 			copy(cond = cond.transform(pf).asInstanceOf[ExpressionResult], executed = executed.transform(pf).asInstanceOf[ExpressionResult])
 		}
@@ -95,8 +96,22 @@ object ScalaCodeSheet {
 		// so it was evaluated for sure unless we have a bug
 		def wasEvaluated = { assert(cond.wasEvaluated); true; }
 	}
+	private case class MatchResultPlaceholder(selector: ExpressionResult, cases: List[ExpressionResult], override val line: Int) extends ExpressionResult(line) {
+		def value = cases.find(_.wasEvaluated).get.value
+		def userRepr = error("This should never be called")
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) =
+			copy(selector = selector.transform(pf).asInstanceOf[ExpressionResult], cases = cases.map(_.transform(pf).asInstanceOf[ExpressionResult]))
+		def wasEvaluated = selector.wasEvaluated
+	}
+	case class MatchResult(selector: ExpressionResult, matchedCase: ExpressionResult, override val line: Int) extends ExpressionResult(line) {
+		def value = matchedCase.value
+		def userRepr = selector.userRepr + " match {" + printAfterLineDiff(matchedCase, (expr) => "case => " + expr.userRepr) + "\n}"
+		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) =
+			copy(selector = selector.transform(pf).asInstanceOf[ExpressionResult], matchedCase = matchedCase.transform(pf).asInstanceOf[ExpressionResult])
+		def wasEvaluated = { assert(selector.wasEvaluated); true;}
+	}
 	case class DefDefResult(name: String, params: List[AssignOrNamedArg], inferredType: Option[String], rhs: ExpressionResult, override val line: Int) extends StatementResult(line) {
-		def userRepr = name + asParamList(params) + inferredType.map(": " + _).getOrElse("") + " => " + rhs.userRepr
+		def userRepr = name + asParamList(params) + inferredType.map(": " + _).getOrElse("") + " =>" + printAfterLineDiff(rhs)
 		def transformChildren(pf: PartialFunction[StatementResult, StatementResult]) = copy(rhs = rhs.transform(pf).asInstanceOf[ExpressionResult])
 		def value = Some(())
 		def wasEvaluated = rhs.wasEvaluated
@@ -214,6 +229,14 @@ object ScalaCodeSheet {
 			val resultTree = if (topLevel) wrapInTry(ifTree) else ifTree
 			(resultTree, ifResult)
 		}
+		def evaluateMatch(AST: Match, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, MatchResultPlaceholder) = {
+			val (selectorTree, selectorResult) = evaluateImpl(AST.selector, classDefs, false)
+			val (caseTrees, caseResults) = AST.cases.map(evaluateImpl(_, classDefs, false)).unzip
+			val matchResult = MatchResultPlaceholder(selectorResult.get.asInstanceOf[ExpressionResult], caseResults.map(_.get.asInstanceOf[ExpressionResult]), AST.pos.line)
+			val matchTree = Match(selectorTree.head, caseTrees.map(_.head.asInstanceOf[CaseDef]))
+			val resultTree = if (topLevel) wrapInTry(matchTree) else matchTree
+			(resultTree, matchResult)
+		}
 		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Try], DefDefResult)] = {
 			AST.sampleParamsOption(classDefs) map { sampleValues =>
 				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false)
@@ -292,6 +315,14 @@ object ScalaCodeSheet {
 				case ifTree: If => {
 					val (newIf, ifResult) = evaluateIf(ifTree, classDefs, topLevel)
 					(List(newIf), Some(ifResult))
+				}
+				case matchTree: Match => {
+					val (newMatch, matchResult) = evaluateMatch(matchTree, classDefs, topLevel)
+					(List(newMatch), Some(matchResult))
+				}
+				case caseDef: CaseDef => {
+					val (newBody, bodyResult) = evaluateImpl(caseDef.body, classDefs, false)
+					(List(CaseDef(caseDef.pat, newBody.head)), bodyResult)
 				}
 				case valDef: ValDef => {
 					val (newValDefOption, valDefResult) = evaluateValDef(valDef, classDefs, topLevel)
@@ -387,6 +418,8 @@ object ScalaCodeSheet {
 				val executed = if (result.isTrue) then else else_
 				IfThenElseResult(cond, executed, line)
 			}
+			case result @MatchResultPlaceholder(selector, cases, line) =>
+				MatchResult(selector, cases.find(_.wasEvaluated).get, line)
 			case block @BlockResult(children, _) => block.copy(children = children.filter(_.wasEvaluated))
 		})
 		Result(statementResults.filter(_.wasEvaluated), outputStream.toString)

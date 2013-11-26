@@ -111,6 +111,11 @@ class ScalaCodeSheetResult extends Specification {
 				val result = DefDefResult("perform", Nil, None, SimpleExpressionResult(5, line = 1), line = 1)
 				result.userRepr === "perform => 5"
 			}
+			"on seperate line" in {
+				val result = DefDefResult("perform", Nil, None, SimpleExpressionResult(5, line = 2), line = 1)
+				result.userRepr === """perform =>
+									  |	5""".stripMargin
+			}
 			"with params" in {
 				val params = List(
 					AssignOrNamedArg(Ident(newTermName("a")), Literal(Constant(5))),
@@ -163,6 +168,27 @@ class ScalaCodeSheetResult extends Specification {
 					result.userRepr === "Cat(12,Jack)"
 				}
 			}
+		}
+		"IfThenElseResult" in {
+			val result = IfThenElseResult(
+				cond = SimpleExpressionResult(true, Nil, 1),
+				executed = SimpleExpressionResult(6, Nil, 3),
+				line = 1
+			)
+			result.userRepr === """
+								  |
+								  |	then => 6""".stripMargin
+		}
+		"MatchResult" in {
+			val result = MatchResult(
+				selector = SimpleExpressionResult(List(1,2,3), Nil, 1),
+				matchedCase = SimpleExpressionResult(1, Nil, 3),
+				line = 1
+			)
+			result.userRepr === """List(1, 2, 3) match {
+								  |
+								  |	case => 1
+								  |}""".stripMargin
 		}
 		"ExceptionResult" in {
 			val result = ExceptionValue(new IndexOutOfBoundsException())
