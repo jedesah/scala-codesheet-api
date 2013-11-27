@@ -71,5 +71,71 @@ class Examples extends Specification {
 				}
 			}
 		}
+		"Poor man's type class" in {
+			"Part 1" in {
+				"just definition of ===" in {
+					val code = """object SimpleEquality {
+								 |	implicit class Equal[A](left: A) {
+	    						 |		def ===(right: A): Boolean = left == right
+								 |	}
+								 |}""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(object_), "") =>
+						object_ ==== ModuleDefResult("SimpleEquality", BlockResult(Nil, 1), 1)
+					}
+				}
+				"definition of === + use of it" in {
+					val code = """object SimpleEquality {
+								 |	implicit class Equal[A](left: A) {
+	    						 |		def ===(right: A): Boolean = left == right
+								 |	}
+								 |	4 === 4
+								 |	'a' === 'b'
+								 |}""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(object_), "") =>
+						object_ must beLike { case ModuleDefResult("SimpleEquality", BlockResult(List(expr1, expr2), 1), 1) =>
+							expr1 ==== SimpleExpressionResult(true, Nil, 5)
+							expr2 ==== SimpleExpressionResult(false, Nil, 6)
+						}
+					}
+				}
+				"same thing but no need for a wrapping object cause we are in codebrew" in {
+					val code = """implicit class Equal[A](left: A) {
+	    						 |	def ===(right: A): Boolean = left == right
+								 |}
+								 |4 === 4
+								 |'a' === 'b'""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(expr1, expr2), "") =>
+						expr1 ==== SimpleExpressionResult(true, Nil, 4)
+						expr2 ==== SimpleExpressionResult(false, Nil, 5)
+					}
+				}
+				"same thing with inline optimization" in {
+					val code = """implicit class Equal[A](val left: A) extends AnyVal {
+	    						 |	def ===(right: A): Boolean = left == right
+	  							 |}
+								 |4 === 4
+								 |'a' === 'b'""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(expr1, expr2), "") =>
+						expr1 ==== SimpleExpressionResult(true, Nil, 4)
+						expr2 ==== SimpleExpressionResult(false, Nil, 5)
+					}
+				}.pendingUntilFixed("This does not work because of limitations on values classes. The toolbox simply does not support values classes so there is nothing I can do about it")
+			}
+			"Part 2" in {
+				"relaxed type constraints" in {
+					val code = """implicit class Equal[L](left: L) {
+								 |	def ===[R](right: R): Boolean = left == right
+								 |}
+								 |4 === 4
+								 |'a' === 'b'
+								 |true === 3.0""".stripMargin
+					computeResults(code, false) must beLike { case Result(List(expr1, expr2, expr3), "") =>
+						expr1 ==== SimpleExpressionResult(true, Nil, 4)
+						expr2 ==== SimpleExpressionResult(false, Nil, 5)
+						expr3 ==== SimpleExpressionResult(false, Nil, 6)
+					}
+				}
+			}
+		}
 	}
 }
