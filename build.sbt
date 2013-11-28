@@ -34,5 +34,5 @@ import com.github.jedesah.codesheet.api.ScalaCodeSheet
 import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.universe._
 import scala.tools.reflect.ToolBox
-val tb = cm.mkToolBox()
+val tb = cm.mkToolBox(options = "-Yrangepos")
 """
