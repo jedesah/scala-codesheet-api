@@ -7,24 +7,27 @@ name := "codesheet-api"
 
 version := "0.6.0-SNAPSHOT"
 
-scalaHome := Some(file("/Volumes/Data/JR/Projects/scala/build/pack/"))
+scalaVersion := "2.10.4-20131126-231426-da7395016c"
 
 seq(bintrayPublishSettings:_*)
+
+seq(bintrayResolverSettings:_*)
 
 licenses += ("GPL-3.0", url("http://www.gnu.org/copyleft/gpl.html"))
 
 libraryDependencies ++= Seq(
 	"org.scala-lang" % "scala-compiler" % scalaVersion.value,
-	"com.github.nscala-time" %% "nscala-time" % "0.6.0",
-	"org.specs2" %% "specs2" % "2.3.1" % "test",
-	"com.chuusai" % "shapeless" % "2.0.0-SNAPSHOT" cross CrossVersion.full changing()
+	"com.github.nscala-time" % "nscala-time_2.10" % "0.6.0",
+	"com.chuusai" % "shapeless_2.10.2" % "2.0.0-SNAPSHOT" changing(),
+	"org.specs2" % "specs2_2.10" % "2.3.1" % "test"
 )
 
 jacoco.settings
 
 resolvers ++= Seq(
   "Sonatype OSS Releases"  at "http://oss.sonatype.org/content/repositories/releases/",
-  "Sonatype OSS Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/"
+  "Sonatype OSS Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/",
+  bintray.Opts.resolver.repo("jedesah", "maven")
 )
 
 //scalacOptions ++= Seq("-feature")
