@@ -5,20 +5,37 @@ organization := "com.github.jedesah"
 
 name := "codesheet-api"
 
-versionWithGit
+version := "0.6.0-SNAPSHOT"
 
-scalaVersion := "2.10.3"
+scalaVersion := "2.10.4-20131126-231426-da7395016c"
 
-publishTo := Some(Resolver.file("Github Pages", 
-	Path.userHome / "Repo" / "project" / "log4900.github.com" / "maven" asFile)(
-		Patterns(true, Resolver.mavenStyleBasePattern)
-	)
+seq(bintrayPublishSettings:_*)
+
+seq(bintrayResolverSettings:_*)
+
+licenses += ("GPL-3.0", url("http://www.gnu.org/copyleft/gpl.html"))
+
+libraryDependencies ++= Seq(
+	"org.scala-lang" % "scala-compiler" % scalaVersion.value,
+	"com.github.nscala-time" % "nscala-time_2.10" % "0.6.0",
+	"com.chuusai" % "shapeless_2.10.2" % "2.0.0-SNAPSHOT" changing(),
+	"org.specs2" % "specs2_2.10" % "2.3.1" % "test"
 )
-
-libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.10.3"
-
-libraryDependencies += "org.specs2" %% "specs2" % "2.2.3" % "test"
 
 jacoco.settings
 
+resolvers ++= Seq(
+  "Sonatype OSS Releases"  at "http://oss.sonatype.org/content/repositories/releases/",
+  "Sonatype OSS Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/",
+  bintray.Opts.resolver.repo("jedesah", "maven")
+)
+
 //scalacOptions ++= Seq("-feature")
+
+initialCommands in console := """
+import com.github.jedesah.codesheet.api.ScalaCodeSheet
+import scala.reflect.runtime.{currentMirror => cm}
+import scala.reflect.runtime.universe._
+import scala.tools.reflect.ToolBox
+val tb = cm.mkToolBox(options = "-Yrangepos")
+"""
