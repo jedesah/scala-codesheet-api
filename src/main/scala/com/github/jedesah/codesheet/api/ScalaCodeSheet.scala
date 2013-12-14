@@ -237,7 +237,7 @@ object ScalaCodeSheet {
 			val resultTree = if (topLevel) wrapInTry(matchTree) else matchTree
 			(resultTree, matchResult)
 		}
-		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Try], DefDefResult)] = {
+		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Tree], DefDefResult)] = {
 			AST.sampleParamsOption(classDefs) map { sampleValues =>
 				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false)
 				// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
@@ -245,7 +245,7 @@ object ScalaCodeSheet {
 				val block = rhsTrees.headOption.map { rhsTree =>
 					Block(sampleValues, rhsTree)
 				}
-				val try_ = block.map(Try(_, List(CaseDef(Ident(nme.WILDCARD), EmptyTree, Literal(Constant(())))), EmptyTree))
+				val try_ = block.map(wrapInTry(_))
 				val defDefResult = DefDefResult(AST.name.toString, paramList(sampleValues), None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
 				(try_, defDefResult)
 			}
