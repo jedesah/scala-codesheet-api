@@ -15,6 +15,8 @@ class ScalaCodeSheetSpec extends Specification {
 		if (first.equalsStructure(second)) ok
 		else first === second
 
+	def verifyException(ex: Throwable) = ex must beLike { case ex: java.lang.ArithmeticException => ex.getMessage ==== "/ by zero" }
+
 	val tb = cm.mkToolBox()
 	//args.select(ex = "simple definition")
 	//args.execute(sequential = true)
@@ -1060,6 +1062,44 @@ class ScalaCodeSheetSpec extends Specification {
 						}
 					}
 				}
+				"with exception" in {
+					"in value definition" in {
+						val code = """case class A(b: String) {
+									 |	val a = 3 / 0
+									 |}""".stripMargin
+						computeResults(code, enableSteps = false) must beLike { case Result(List(classDef), "") =>
+						 	classDef must beLike { case ClassDefResult("A", params, body,1) =>
+								params must beLike { case List(b) =>
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))))
+						 		}
+						 		body must beLike { case BlockResult(
+						 			List(
+						 				ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 2), 2)
+						 			), 1) =>
+						 			verifyException(ex)
+						 		}
+							}
+						}
+					}
+					"in expression" in {
+						val code = """case class A(b: String) {
+									 |	3 / 0
+									 |}""".stripMargin
+						computeResults(code, enableSteps = false) must beLike { case Result(List(classDef), "") =>
+						 	classDef must beLike { case ClassDefResult("A", params, body,1) =>
+								params must beLike { case List(b) =>
+									structureEquals(b, AssignOrNamedArg(Ident(newTermName("b")), Literal(Constant("foo"))))
+						 		}
+						 		body must beLike { case BlockResult(
+						 			List(
+						 				SimpleExpressionResult(ExceptionValue(ex), Nil, 2)
+						 			), 1) =>
+						 			verifyException(ex)
+						 		}
+							}
+						}
+					}
+				}
 			}
 			"abstract" in {
 				"one value definition" in {
@@ -1419,7 +1459,6 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 		}
 		"throws an exception" in {
-			def verifyException(ex: Throwable) = ex must beLike { case ex: java.lang.ArithmeticException => ex.getMessage ==== "/ by zero" }
 			"value definition" in {
 				val code = "val a = 10 / 0"
 				computeResults(code, false) must beLike { case Result(List(a), "") =>
