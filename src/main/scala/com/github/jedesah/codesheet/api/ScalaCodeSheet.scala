@@ -188,19 +188,38 @@ object ScalaCodeSheet {
 
 		var index = 0
 
-		def wrapInTry(toWrap: Tree): Tree = Apply(Select(Select(Ident(newTermName("scala")), newTermName("util")), newTermName("Try")), List(toWrap))
+		val tryTerm = Select(Select(Ident(newTermName("scala")), newTermName("util")), newTermName("Try"))
+		val tryType = Select(Select(Ident(newTermName("scala")), newTermName("util")), newTypeName("Try"))
+		val mutableMapTerm = Select(Select(Select(Ident(newTermName("scala")), newTermName("collection")), newTermName("mutable")), newTermName("Map"))
+		def wrapInTry(toWrap: Tree): Tree = Apply(tryTerm, List(toWrap))
 
 		def evaluateValDef(AST: ValDef, classDefs: Traversable[ClassDef], topLevel: Boolean): (List[Tree], Option[ValDefResult]) = {
 			if (AST.isSynthetic) (List(AST), None)
 			else {
 				val topLevelGoingForward = topLevel && !AST.isVar
-				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, topLevelGoingForward)
-				// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
-				// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
+				val declaredType = if (AST.tpt.isEmpty) None else Some(AST.tpt)
+				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, topLevelGoingForward, declaredType)
+				// The Scala AST does not type it, but you can only have one expression as a rhs of a ValDef
 				val trees = rhsTrees.headOption.map { rhsTree =>
 					if (topLevelGoingForward) {
+						// If we are at the top level, we try and be smart and apply a transformation to the AST in order
+						// to keep on going even if a runtime error is thrown and uncaught while computing the value of the definition
+						// We wrap the actual value in a Try and give it another name and then create a function definition with the
+						// same name as the value definition. The subsequent user code will (without knowing it) call the function instead
+						// of the value (which is now a value of type Try). The function calls get on the value of the Try.
+						// This means any subsequent code that uses the value definition which threw an exception will also throw an exception
+						// but any code that nothing to do with this value will go on unaffected.
+						// The semantics of this does not hold anywhere else than at the topLevel where this is a desired feature.
+						// It would not make much to behave like this within a Block
 						val tempName = newTermName(reservedName + "_b_" + AST.name.toString)
-						val wrappedTemp = ValDef(Modifiers(), tempName, TypeTree(), rhsTree)
+						val wrappedTemp = {
+							// Previously, we put no type and the compiler did the job of inferring that the return type was an instance of Try for us
+							// However this caused some bugs with user code with declared types that affect type inference
+							// So we put the same type as the user but within a Try[‘userType‘]
+							val typeDeclaration = if (AST.tpt.isEmpty) AST.tpt // But we can't do that if we don't know the type yet, but there is no problem in that case
+						                          else AppliedTypeTree(tryType, List(AST.tpt))
+							ValDef(Modifiers(), tempName, typeDeclaration, rhsTree)
+						}
 						val asFunDef = DefDef(AST.mods, AST.name, List(), List(), AST.tpt, Select(Ident(tempName), newTermName("get")))
 						List(wrappedTemp, asFunDef)
 					}
@@ -220,18 +239,20 @@ object ScalaCodeSheet {
 			val result = ValDefResult(AST.lhs.toString, None, rhsResult.get.asInstanceOf[ExpressionResult], line = AST.pos.line)
 			(assign, result)
 		}
-		def evaluateIf(AST: If, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, IfThenElseResultPlaceholder) = {
-			val (thenTree, thenResult) = evaluateImpl(AST.thenp, classDefs, false)
-			val (elseTree, elseResult) = evaluateImpl(AST.elsep, classDefs, false)
+		def evaluateIf(AST: If, classDefs: Traversable[ClassDef], topLevel: Boolean, declaredType: Option[Tree]): (Tree, IfThenElseResultPlaceholder) = {
 			val (condTree, condResult) = evaluateImpl(AST.cond, classDefs, false)
+			val (thenTree, thenResult) = evaluateImpl(AST.thenp, classDefs, false, declaredType)
+			val (elseTree, elseResult) = evaluateImpl(AST.elsep, classDefs, false, declaredType)
+			val ifTree = {
+				val ifTree = If(condTree.head, thenTree.head, elseTree.head)
+				if (topLevel) wrapInTry(ifTree) else ifTree
+			}
 			val ifResult = IfThenElseResultPlaceholder(condResult.get.asInstanceOf[ExpressionResult], thenResult.get.asInstanceOf[ExpressionResult], elseResult.get.asInstanceOf[ExpressionResult], AST.pos.line)
-			val ifTree = If(condTree.head, thenTree.head, elseTree.head)
-			val resultTree = if (topLevel) wrapInTry(ifTree) else ifTree
-			(resultTree, ifResult)
+			(ifTree, ifResult)
 		}
-		def evaluateMatch(AST: Match, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, MatchResultPlaceholder) = {
+		def evaluateMatch(AST: Match, classDefs: Traversable[ClassDef], topLevel: Boolean, declaredType: Option[Tree]): (Tree, MatchResultPlaceholder) = {
 			val (selectorTree, selectorResult) = evaluateImpl(AST.selector, classDefs, false)
-			val (caseTrees, caseResults) = AST.cases.map(evaluateImpl(_, classDefs, false)).unzip
+			val (caseTrees, caseResults) = AST.cases.map(evaluateImpl(_, classDefs, false, declaredType)).unzip
 			val matchResult = MatchResultPlaceholder(selectorResult.get.asInstanceOf[ExpressionResult], caseResults.map(_.get.asInstanceOf[ExpressionResult]), AST.pos.line)
 			val matchTree = Match(selectorTree.head, caseTrees.map(_.head.asInstanceOf[CaseDef]))
 			val resultTree = if (topLevel) wrapInTry(matchTree) else matchTree
@@ -239,7 +260,8 @@ object ScalaCodeSheet {
 		}
 		def evaluateDefDef(AST: DefDef, classDefs: Traversable[ClassDef]): Option[(Option[Tree], DefDefResult)] = {
 			AST.sampleParamsOption(classDefs) map { sampleValues =>
-				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false)
+				val declaredType = if (AST.tpt.isEmpty) None else Some(AST.tpt)
+				val (rhsTrees, rhsResult) = evaluateImpl(AST.rhs, classDefs, false, declaredType)
 				// The Scala AST does not type it, but you can only have an expression as a rhs of a ValDef
 				// It's possible that we do not get any tree if we encounter something like a ??? that we do not need to evaluate in ordre to give a meaninfull result
 				val block = rhsTrees.headOption.map { rhsTree =>
@@ -250,29 +272,33 @@ object ScalaCodeSheet {
 				(try_, defDefResult)
 			}
 		}
-		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef], topLevel: Boolean): (Tree, StatementResult) = {
+		def evaluateBlock(AST: Block, classDefs: Traversable[ClassDef], topLevel: Boolean, declaredType: Option[Tree]): (Tree, StatementResult) = {
 			import shapeless.syntax.typeable._
 			// This block was added by the Scala compiler while desaguring a Scala feature
 			// For instance, when using an operator ending with a colon
-			if (AST.children(0).cast[ValDef].map(_.isSynthetic).getOrElse(false) && AST.children.length == 2) {
-				val (trees, resultOption) = evaluateImpl(AST.children(1), classDefs, false)
+			val isSynthetic = AST.children(0).cast[ValDef].map(_.isSynthetic).getOrElse(false) && AST.children.length == 2
+			if (isSynthetic) {
+				val (trees, resultOption) = evaluateImpl(AST.children(1), classDefs, false, declaredType)
 				// We return the same compiler generated block exept we instrumented
 				// the expression the user is interested in
 				// i.e we did not instrument the compiler generated code that would surprise the user
 				(Block(List(AST.children(0)), trees.head), resultOption.get)
 			}
 			else {
-				val additionnalClassDefs = AST.children.collect { case child: ClassDef => child }
-				val (trees, results) = evaluateList(AST.children, classDefs, false)
+				val (trees, results) = evaluateList(AST.children, classDefs, false, declaredType)
 				val newBlock = Block(trees.init, trees.last)
 				val transformedTree = if (topLevel) wrapInTry(newBlock) else newBlock
 				(transformedTree, BlockResult(results, AST.pos.line))
 			}
 		}
-		def evaluateList(list: List[Tree], classDefs: Traversable[ClassDef], topLevel: Boolean) : (List[Tree], List[StatementResult]) = {
-			val additionnalClassDefs = list.collect { case child: ClassDef => child }
-			val (childTrees, childResults) = list.map(evaluateImpl(_, classDefs ++ additionnalClassDefs, topLevel)).unzip
-			(childTrees.flatten, childResults.flatten)
+		def evaluateList(list: List[Tree], classDefs: Traversable[ClassDef], topLevel: Boolean, declaredType: Option[Tree] = None) : (List[Tree], List[StatementResult]) = {
+			if (list.isEmpty) (Nil, Nil)
+			else {
+				val additionnalClassDefs = list.collect { case child: ClassDef => child }
+				def eval(tree: Tree, declaredType: Option[Tree] = None) = evaluateImpl(tree, classDefs ++ additionnalClassDefs, topLevel, declaredType)
+				val (childTrees, childResults) = (list.init.map(eval(_)) :+ eval(list.last, declaredType)).unzip
+				(childTrees.flatten, childResults.flatten)
+			}
 		}
 		def evaluateClassDef(AST: ClassDef, classDefs: Traversable[ClassDef]): Option[(Option[Block], ClassDefResult)] = {
 			AST.constructorOption.flatMap { constructor =>
@@ -306,18 +332,25 @@ object ScalaCodeSheet {
 			val (trees, results) = evaluateList(body, classDefs, false)
 			(Block(trees, Literal(Constant(()))), ModuleDefResult(AST.name.toString, BlockResult(results, line = AST.pos.line), line = AST.pos.line))
 		}
-		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef], topLevel: Boolean): (List[Tree], Option[StatementResult]) = {
+		/**
+		 * @param declaredType In order to maintain the exact semantics of the code, we need to know if we are within a value or function definition and what type it
+		 *                     was declared as. Of course it is also possible that it was not declared. The param should be None if it was not declared or if we are
+		 *                     not within a value of function definition. Other it should contain the declared type in the form of a TypeTree
+		 */
+		def evaluateImpl(AST: Tree, classDefs: Traversable[ClassDef], topLevel: Boolean, declaredType: Option[Tree] = None): (List[Tree], Option[StatementResult]) = {
+			// We only need to consider the declaredType in the case of an expression that can be found on the rhs of a definition
+			// This means we need to consider it for If, Match, Block and any other "simple" expression
 			AST match {
 				case assign: Assign => {
 					val (newAssignOption, valDefResult) = evaluateAssign(assign, classDefs)
 					(newAssignOption.toList, Some(valDefResult))
 				}
 				case ifTree: If => {
-					val (newIf, ifResult) = evaluateIf(ifTree, classDefs, topLevel)
+					val (newIf, ifResult) = evaluateIf(ifTree, classDefs, topLevel, declaredType)
 					(List(newIf), Some(ifResult))
 				}
 				case matchTree: Match => {
-					val (newMatch, matchResult) = evaluateMatch(matchTree, classDefs, topLevel)
+					val (newMatch, matchResult) = evaluateMatch(matchTree, classDefs, topLevel, declaredType)
 					(List(newMatch), Some(matchResult))
 				}
 				case caseDef: CaseDef => {
@@ -334,7 +367,7 @@ object ScalaCodeSheet {
 					} getOrElse (List(funDef), None)
 				}
 				case block: Block => {
-					val (newblock, blockResult) = evaluateBlock(block, classDefs, topLevel)
+					val (newblock, blockResult) = evaluateBlock(block, classDefs, topLevel, declaredType)
 					(List(newblock), Some(blockResult))
 				}
 				case classDef: ClassDef => {
@@ -357,7 +390,10 @@ object ScalaCodeSheet {
 					// We create a temporary value to store the result of the expression
 					// We wrap the rhs in a Try monad to detect exceptions
 					val tempName = newTermName(nameOfTemp)
-					val tempVal = ValDef(Modifiers(), tempName, TypeTree(), wrapInTry(expr))
+					val tempVal = {
+						val tempDeclaredType = declaredType.map(declaredType => AppliedTypeTree(tryType, List(declaredType))).getOrElse(TypeTree())
+						ValDef(Modifiers(), tempName, tempDeclaredType, wrapInTry(expr))
+					}
 					val indexLiteral = Literal(Constant(index))
 					val storeInMap = Apply(Select(Ident(newTermName(nameOfMap)), newTermName("update")), List(indexLiteral, Ident(tempName)))
 					// We extract the actual value from the monad to preserve original program flow
@@ -372,7 +408,7 @@ object ScalaCodeSheet {
 			}
 		}
 
-		val beginMap =  ValDef(Modifiers(), newTermName(nameOfMap), TypeTree(), Apply(TypeApply(Select(Select(Select(Ident(newTermName("scala")), newTermName("collection")), newTermName("mutable")), newTermName("Map")), List(Ident(newTypeName("Int")), Ident(newTypeName("Any")))), List()))
+		val beginMap = ValDef(Modifiers(), newTermName(nameOfMap), TypeTree(), Apply(TypeApply(mutableMapTerm, List(Ident(newTypeName("Int")), Ident(newTypeName("Any")))), List()))
 		val retrieveMap = Ident(newTermName(nameOfMap))
 
 		val (trees, results) = AST match {

@@ -823,6 +823,30 @@ class ScalaCodeSheetSpec extends Specification {
 					second ==== ValDefResult("b", None, rhs = SimpleExpressionResult(45, line = 2), line = 2)
 				}
 			}
+			"with type declaration" in {
+				"simple" in {
+					val code = "val a: Int = 34"
+					computeResults(code) must beLike { case Result(List(only), "") =>
+						only ==== ValDefResult("a", None, rhs = SimpleExpressionResult(34, line = 1), line = 1)
+					}
+				}
+				"with type parameter" in {
+					"List" in {
+						val code = "val a: List[Int] = List(2)"
+						computeResults(code) must beLike { case Result(List(only), "") =>
+							only ==== ValDefResult("a", None, rhs = SimpleExpressionResult(List(2), line = 1), line = 1)
+						}
+					}
+					"Array" in {
+						val code = "val a: Array[Int] = Array()"
+						computeResults(code) must beLike { case Result(List(only), "") =>
+							only must beLike { case ValDefResult("a", None, SimpleExpressionResult(ObjectResult(array), Nil, 1), 1) =>
+								array must beLike { case Array() => ok}
+							}
+						}
+					}
+				}
+			}
 			"pattern matching" in {
 				"simple" in {
 					val code = "val (a, b) = (4,5)"
