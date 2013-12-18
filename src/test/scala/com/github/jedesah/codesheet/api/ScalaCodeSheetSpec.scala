@@ -817,7 +817,7 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 			"two" in {
 				val code = """val a = 34
-								|val b = 45""".stripMargin
+							 |val b = 45""".stripMargin
 				computeResults(code) must beLike { case Result(List(first, second), "") =>
 					first ==== ValDefResult("a", None, rhs = SimpleExpressionResult(34, line = 1), line = 1)
 					second ==== ValDefResult("b", None, rhs = SimpleExpressionResult(45, line = 2), line = 2)
