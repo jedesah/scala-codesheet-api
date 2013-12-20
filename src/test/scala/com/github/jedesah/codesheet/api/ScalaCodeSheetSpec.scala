@@ -1555,6 +1555,28 @@ class ScalaCodeSheetSpec extends Specification {
 						}
 					}
 				}
+				"plays well with synctactic desugaring" in {
+					"expression" in {
+						val code = """(3 / 0) :: Nil
+									 |val b = 5""".stripMargin
+						computeResults(code, false) must beLike { case Result(List(a,b), "") =>
+							a must beLike { case SimpleExpressionResult(ExceptionValue(ex), Nil, 1) =>
+								verifyException(ex)
+							}
+							b ==== ValDefResult("b", None, SimpleExpressionResult(5, Nil,2),2)
+						}
+					}
+					"valDef" in {
+						val code = """val a = (3 / 0) :: Nil
+									 |val b = 5""".stripMargin
+						computeResults(code, false) must beLike { case Result(List(a,b), "") =>
+							a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
+								verifyException(ex)
+							}
+							b ==== ValDefResult("b", None, SimpleExpressionResult(5, Nil,2),2)
+						}
+					}
+				}
 			}
 			"inside block" in {
 				val code = """{
