@@ -817,10 +817,34 @@ class ScalaCodeSheetSpec extends Specification {
 			}
 			"two" in {
 				val code = """val a = 34
-								|val b = 45""".stripMargin
+							 |val b = 45""".stripMargin
 				computeResults(code) must beLike { case Result(List(first, second), "") =>
 					first ==== ValDefResult("a", None, rhs = SimpleExpressionResult(34, line = 1), line = 1)
 					second ==== ValDefResult("b", None, rhs = SimpleExpressionResult(45, line = 2), line = 2)
+				}
+			}
+			"with type declaration" in {
+				"simple" in {
+					val code = "val a: Int = 34"
+					computeResults(code) must beLike { case Result(List(only), "") =>
+						only ==== ValDefResult("a", None, rhs = SimpleExpressionResult(34, line = 1), line = 1)
+					}
+				}
+				"with type parameter" in {
+					"List" in {
+						val code = "val a: List[Int] = List(2)"
+						computeResults(code) must beLike { case Result(List(only), "") =>
+							only ==== ValDefResult("a", None, rhs = SimpleExpressionResult(List(2), line = 1), line = 1)
+						}
+					}
+					"Array" in {
+						val code = "val a: Array[Int] = Array()"
+						computeResults(code) must beLike { case Result(List(only), "") =>
+							only must beLike { case ValDefResult("a", None, SimpleExpressionResult(ObjectResult(array), Nil, 1), 1) =>
+								array must beLike { case Array() => ok}
+							}
+						}
+					}
 				}
 			}
 			"pattern matching" in {
@@ -1528,6 +1552,28 @@ class ScalaCodeSheetSpec extends Specification {
 					computeResults(code, false) must beLike { case Result(List(a), "") =>
 						a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
 							verifyException(ex)
+						}
+					}
+				}
+				"plays well with synctactic desugaring" in {
+					"expression" in {
+						val code = """(3 / 0) :: Nil
+									 |val b = 5""".stripMargin
+						computeResults(code, false) must beLike { case Result(List(a,b), "") =>
+							a must beLike { case SimpleExpressionResult(ExceptionValue(ex), Nil, 1) =>
+								verifyException(ex)
+							}
+							b ==== ValDefResult("b", None, SimpleExpressionResult(5, Nil,2),2)
+						}
+					}
+					"valDef" in {
+						val code = """val a = (3 / 0) :: Nil
+									 |val b = 5""".stripMargin
+						computeResults(code, false) must beLike { case Result(List(a,b), "") =>
+							a must beLike { case ValDefResult("a", None, SimpleExpressionResult(ExceptionValue(ex), Nil, 1), 1) =>
+								verifyException(ex)
+							}
+							b ==== ValDefResult("b", None, SimpleExpressionResult(5, Nil,2),2)
 						}
 					}
 				}
