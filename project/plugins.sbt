@@ -8,3 +8,5 @@ resolvers += Resolver.url(
         Resolver.ivyStylePatterns)
 
 addSbtPlugin("me.lessis" % "bintray-sbt" % "0.1.1")
+
+addSbtPlugin("com.github.jedesah" % "application-classpath" % "0.1-SNAPSHOT")

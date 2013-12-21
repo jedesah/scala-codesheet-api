@@ -1,4 +1,4 @@
-package com.github.jedesah.codesheet.api
+package com.github.jedesah.insight.scala
 
 import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.{universe => ru}
@@ -10,15 +10,16 @@ import scala.reflect.runtime.universe.Flag._
 import com.github.jedesah.Math
 import com.github.jedesah.ScalaUtils._
 import com.github.jedesah.AugmentedCollections._
+import TreeExtras._
 
 import scala.reflect.internal.util._
 import scala.tools.nsc.interactive.Response
 
-object ScalaCodeSheet {
+object Eval {
 
 	val reporter = new scala.tools.nsc.reporters.StoreReporter()
 	val settings = new scala.tools.nsc.Settings()
-	settings.classpath.value = System.getProperty("replhtml.class.path")
+	settings.classpath.value = System.getProperty("sbt.application.class.path")
 	val compiler: scala.tools.nsc.interactive.Global = new scala.tools.nsc.interactive.Global(settings, reporter)
 
 	val importer0 = ru.mkImporter(compiler)
@@ -297,30 +298,41 @@ object ScalaCodeSheet {
 		instrumentedAST
 	}
 
-	def computeResults(code: String, enableSteps: Boolean = true): Result = {
-		val code1 = """object Codebrew {
-                 						 |	4 + 4
-                 						 |	gghh
-                 						 |}""".stripMargin
+	def parse(code: String): List[compiler.Tree] = {
+		if (code == "") Nil
+		else {
+			val prefix = "object Codebrew {"
+			val suffix = "}"
 
-		val file = new BatchSourceFile("default", code1)
-		val response = new Response[Unit]()
-		compiler.askReload(List(file), response)
-		response.get // block until the presentation reloaded the code
+			val file = new BatchSourceFile("default", prefix + code + suffix)
+			val response = new Response[Unit]()
+			compiler.askReload(List(file), response)
+			response.get // block until the presentation reloaded the code
 
-		val response1 = new Response[compiler.Tree]()
-		compiler.askLoadedTyped(file, response1)
-		val AST: compiler.Tree = response1.get match {
-		  case Left(tree) => tree
-		  case Right(_) => error("no tree")
+			val response1 = new Response[compiler.Tree]()
+			compiler.askLoadedTyped(file, response1)
+			val AST: compiler.Tree = response1.get match {
+			  case Left(tree) => tree
+			  case Right(_) => error("no tree")
+			}
+			// The AST produced by the PC is contained in an "empty" package
+			// Then we need to extract the list of ASTs from the object we wrapped them in.
+			AST.children(1).asInstanceOf[compiler.ModuleDef].impl.body.drop(1)
 		}
-		val actualAST = AST.asInstanceOf[compiler.ModuleDef].impl.body
-		val toolBox = cm.mkToolBox()
-		val instrumented = instrument(actualAST, enableSteps = enableSteps)
+	}
+
+	def eval(code: String): Result = {
+		eval(parse(code), true)
+	}
+	def eval(ASTs: List[compiler.Tree], enableSteps: Boolean = true) = {
+		val instrumented = instrument(ASTs, enableSteps = enableSteps)
+
 		val outputStream = new java.io.ByteArrayOutputStream()
 		import scala.util.{Try, Success}
+		val toolBox = cm.mkToolBox()
+		val toEval = toolBox.resetAllAttrs(instrumented.duplicate)
 		val values = Console.withOut(outputStream) {
-			toolBox.eval(instrumented).asInstanceOf[scala.collection.mutable.Map[Int, Try[Any]]]
+			toolBox.eval(toEval).asInstanceOf[scala.collection.mutable.Map[Int, Try[Any]]]
 		}
 		/*
 		// Take the results that were statically generated and update them now that we have the map that tells us
@@ -348,7 +360,7 @@ object ScalaCodeSheet {
 			case block @BlockResult(children, _) => block.copy(children = children.filter(_.wasEvaluated))
 		})
 		*/
-		Result(actualAST, outputStream.toString)
+		Result(ASTs, outputStream.toString)
 	}
 
 	implicit class AugmentedClassDef(classDef: compiler.ClassDef) {

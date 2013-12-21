@@ -30,10 +30,12 @@ resolvers ++= Seq(
   bintray.Opts.resolver.repo("jedesah", "maven")
 )
 
+ApplicationClasspath.newSettings
+
 //scalacOptions ++= Seq("-feature")
 
 initialCommands in console := """
-import com.github.jedesah.codesheet.api.ScalaCodeSheet
+import com.github.jedesah.insight.scala.Eval._
 import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.universe._
 import scala.tools.reflect.ToolBox

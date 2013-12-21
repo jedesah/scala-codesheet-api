@@ -1,9 +1,9 @@
-package com.github.jedesah.codesheet
+package com.github.jedesah.insight.scala
 
 import scala.reflect.runtime.universe._
 import scala.reflect.runtime.universe.Flag._
 
-package object api {
+object TreeExtras {
 
 	def isConstructor(tree: Tree) = tree match {
 		case defdef: DefDef => defdef.name == nme.CONSTRUCTOR
