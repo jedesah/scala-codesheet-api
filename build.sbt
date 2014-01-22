@@ -3,9 +3,9 @@ import JacocoPlugin._
 
 organization := "com.github.jedesah"
 
-name := "codesheet-api"
+name := "scala-insight"
 
-version := "0.6.0-SNAPSHOT"
+version := "0.7.0-SNAPSHOT"
 
 scalaVersion := "2.10.4-20131126-231426-da7395016c"
 
@@ -19,6 +19,7 @@ libraryDependencies ++= Seq(
 	"org.scala-lang" % "scala-compiler" % scalaVersion.value,
 	"com.github.nscala-time" % "nscala-time_2.10" % "0.6.0",
 	"com.chuusai" % "shapeless_2.10.3" % "2.0.0-SNAPSHOT" changing(),
+	"org.scalacheck" % "scalacheck_2.10" % "1.11.1",
 	"org.specs2" % "specs2_2.10" % "2.3.6" % "test"
 )
 
