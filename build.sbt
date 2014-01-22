@@ -35,7 +35,7 @@ ApplicationClasspath.newSettings
 //scalacOptions ++= Seq("-feature")
 
 initialCommands in console := """
-import com.github.jedesah.insight.scala.Eval._
+import com.github.jedesah.insight._
 import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.universe._
 import scala.tools.reflect.ToolBox

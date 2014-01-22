@@ -1,0 +1,32 @@
+import scala.reflect.internal.util._
+
+import scala.tools.nsc.reporters.StoreReporter
+val reporter = new StoreReporter()
+import scala.tools.nsc.Settings
+val settings = new Settings()
+settings.classpath.value = System.getProperty("sbt.application.class.path")
+
+import scala.tools.nsc.interactive.Global
+val compiler = new Global(settings, reporter)
+
+val code1 = """object A {
+			 |	4 + 4
+			 |	gghh
+			 |}""".stripMargin
+
+val file = new BatchSourceFile("default", code1)
+
+import scala.tools.nsc.interactive.Response
+
+val response = new Response[Unit]()
+compiler.askReload(List(file), response)
+response.get // block until the presentation reloaded the code
+
+val response1 = new Response[compiler.Tree]()
+compiler.askLoadedTyped(file, response1)
+val AST: compiler.Tree = response1.get match {
+  case Left(tree) => tree
+  case Right(_) => error("no tree")
+}
+
+val actualAST = AST.children(1).asInstanceOf[compiler.ModuleDef].impl.body

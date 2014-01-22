@@ -1,4 +1,4 @@
-package com.github.jedesah.insight.scala
+package com.github.jedesah
 
 import scala.reflect.runtime.universe._
 import scala.reflect.runtime.universe.Flag._

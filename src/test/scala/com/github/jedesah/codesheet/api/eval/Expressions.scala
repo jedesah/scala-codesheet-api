@@ -1,4 +1,4 @@
-package com.github.jedesah.insight.scala
+package com.github.jedesah.insight
 
 import org.specs2.mutable._
 
@@ -11,7 +11,9 @@ import scala.reflect.runtime.universe.Flag._
 
 class Expressions extends Specification {
 
-	def structureEquals(first: Tree, second: Tree) = 
+	val compiler = createDefaultPC
+
+	def structureEquals(first: compiler.Tree, second: compiler.Tree) = 
 		if (first.equalsStructure(second)) ok
 		else first === second
 
@@ -19,9 +21,9 @@ class Expressions extends Specification {
 
 	"Expressions" should {
 		"literal" in {
-			val originalASTs = parse("1")
-			eval(originalASTs) must beLike { case Result(asts, "") =>
-				asts.zip(originalASTs).map{ case (orig, trans) => if (orig.equalsStructure(trans)) ok else orig === trans}
+			val originalASTs = List(compiler.reify("1").tree)
+			compiler.eval(originalASTs) must beLike { case Result(asts, "") =>
+				asts.zip(originalASTs).map{ case (orig, trans) => structureEquals(orig, trans)}
 				asts(0).attachments.get[SimpleExpressionResult] ==== Some(SimpleExpressionResult(1, Nil))
 			}
 		}
